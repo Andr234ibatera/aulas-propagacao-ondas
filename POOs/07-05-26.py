@@ -167,11 +167,46 @@ class Medium(ABC):
         return f"\t\tMaterial Specifications\nVp={self.vp}\tVs={self.vs}\tRho={self.rho}\n\t\tLamé Constants\nLambda={self.lame_lambda}\tMu={self.lame_mu}\n\t\tDisplacement Fields\nTheta={self.theta}\tOmega={self.omega}\n\t\tKs\nKl={self.k_l}\tKx={self.k_x}\tKt={self.k_t}\tKzt={self.k_zt}\tKzl={self.k_zl}"
 
 
-# TODO confirmar com o professor o nome correto em inglês
 class DisplacementPolarizationMatriz(ABC):
     def __init__(self, medium: Medium):
         super().__init__()
         self.medium = medium
+    
+    @property
+    def sin_theta_l(self) -> np.complex128:
+        """_summary_
+
+        Returns:
+            np.complex128: _description_
+        """
+        return self.medium.k_x/self.medium.k_l
+
+    @property
+    def cos_theta_l(self) -> np.complex128:
+        """_summary_
+
+        Returns:
+            np.complex128: _description_
+        """
+        return self.medium.k_zl/self.medium.k_l
+    
+    @property
+    def sin_theta_t(self) -> np.complex128:
+        """_summary_
+
+        Returns:
+            np.complex128: _description_
+        """
+        return self.medium.k_x/self.medium.k_t
+    
+    @property
+    def cos_theta_t(self) -> np.complex128:
+        """_summary_
+
+        Returns:
+            np.complex128: _description_
+        """
+        return self.medium.k_zt/self.medium.k_t
     
     @property
     def A1(self) -> np.array:
@@ -181,9 +216,9 @@ class DisplacementPolarizationMatriz(ABC):
             np.array: returns a 3x3 `np.array` of `dtype=np.complex128`
         """
         return np.array([
-            [self.medium.k_x/self.medium.k_l, -(self.medium.k_zt/self.medium.k_t), 0.0 + 0.0j],
+            [self.sin_theta_l, -self.cos_theta_t, 0.0 + 0.0j],
             [0.0 + 0.0j, 0.0 + 0.0j, 1.0 + 0.0j],
-            [self.medium.k_zl/self.medium.k_l, self.medium.k_x/self.medium.k_t, 0.0 + 0.0j]
+            [self.cos_theta_l, self.sin_theta_t, 0.0 + 0.0j]
         ], dtype=np.complex128)
     
     @property
@@ -196,21 +231,100 @@ class DisplacementPolarizationMatriz(ABC):
         return self.A1*np.array([[1,1,1], [1,1,1], [-1,-1,1]])
     
     def __str__(self):
-        return f"A1={self.A1}\nA2={self.A2}"
+        return f"A1={self.A1}\nA2={self.A2}\n\tL\nsin(theta_l)={self.sin_theta_l}\tcos(theta_l)={self.cos_theta_l}\n\tT\nsin(theta_t)={self.sin_theta_t}\tcos(theta_t)={self.cos_theta_t}"
+
+
+class LMatriz(ABC):
+    def __init__(self, medium: Medium, displacement: DisplacementPolarizationMatriz):
+        super().__init__()
+        self.m = medium
+        self.d = displacement
     
+    @property
+    def L1(self) -> np.array:
+        """_summary_
+
+        Returns:
+            np.array: returns a 3x3 `np.array` of `dtype=np.complex128`
+        """
+        return np.array([
+            [self.m.lame_lambda * (self.m.k_zl*self.d.cos_theta_l + self.m.k_x*self.d.sin_theta_l) + 2*self.m.lame_mu*self.m.k_zl*self.d.cos_theta_l,
+            self.m.lame_lambda * (self.m.k_zt*self.d.sin_theta_t - self.m.k_x*self.d.cos_theta_t) + 2*self.m.lame_mu*self.m.k_zt*self.d.sin_theta_t, 
+            0.0 + 0.0j],
+            [self.m.lame_mu * (self.m.k_x*self.d.cos_theta_l + self.m.k_zl*self.d.sin_theta_l),
+            self.m.lame_mu * (self.m.k_x*self.d.sin_theta_t - self.m.k_zt*self.d.cos_theta_t),
+            0.0 + 0.0j],
+            [0.0 + 0.0j, 0.0 + 0.0j, self.m.lame_mu*self.m.k_zt]
+        ])
+    
+    @property
+    def L2(self) -> np.array:
+        """_summary_
+
+        Returns:
+            np.array: returns a 3x3 `np.array` of `dtype=np.complex128`
+        """
+        return self.L1 * np.array([[1,1,1],[-1,-1,1],[1,1,-1]])
+    
+    def __str__(self) -> str:
+        return f"L1\n{self.L1}\nL2\n{self.L2}"
+
+
+class LocalImpedanceTensor(ABC):
+    def __init__(self, medium: Medium, displacement: DisplacementPolarizationMatriz, l_matriz: LMatriz):
+        super().__init__()
+        self.m = medium
+        self.d = displacement
+        self.l = l_matriz
+    
+    @property
+    def Z1(self) -> np.array:
+        """_summary_
+
+        Returns:
+            np.array: returns a 3x3 `np.array` of `dtype=np.complex128`
+        """
+        return -(1/self.m.omega) * self.l.L1 @ np.linalg.inv(self.d.A1)
+        
+    @property
+    def Z2(self) -> np.array:
+        """_summary_
+
+        Returns:
+            np.array: returns a 3x3 `np.array` of `dtype=np.complex128`
+        """
+        return -(1/self.m.omega) * self.l.L2 @ np.linalg.inv(self.d.A2)
+    
+    def __str__(self) -> str:
+        return f"Z1\n{self.Z1}\nZ2\n{self.Z2}"
+
     
 if __name__ == "__main__":
-    # Medium from the botton
-    medium_1 = Medium(vp=1000.0, vs=700.0, rho=2500.0)
-    medium_1.theta = 30.0
-    medium_1.omega = 100.0
     # Medium from the top
     medium_2 = Medium(vp=2000.0, vs=1500.0, rho=5000.0)
     medium_2.theta = 30.0
     medium_2.omega = 100.0
-    medium_2.k_x = medium_1.k_x
-    # Displacement Matriz fom the botton
-    disp_1 = DisplacementPolarizationMatriz(medium=medium_1)
-    # Displacement Matriz fom the top
+    # Medium from the botton
+    medium_1 = Medium(vp=1000.0, vs=700.0, rho=2500.0)
+    medium_1.theta = 30.0
+    medium_1.omega = 100.0
+    medium_1.k_x = medium_2.k_x
+    # Displacement Matriz from the top
     disp_2 = DisplacementPolarizationMatriz(medium=medium_2)
+    # Displacement Matriz from the botton
+    disp_1 = DisplacementPolarizationMatriz(medium=medium_1)
+    # L Matriz from the top
+    l_2 = LMatriz(medium=medium_2, displacement=disp_2)
+    # L Matriz from the botton
+    l_1 = LMatriz(medium=medium_1, displacement=disp_1)
+    # Local Impedance Tensor from the top
+    z_2 = LocalImpedanceTensor(medium=medium_2, displacement=disp_2, l_matriz=l_2)
+    # Local Impedance Tensor from the botton
+    z_1 = LocalImpedanceTensor(medium=medium_1, displacement=disp_1, l_matriz=l_1)
+    
+    # TODO esperar a próxima aula para identificar onde colocar G e R, talvez pode ser definido dentro de uma classe com arrays de camadas
+    # Tensor de impedância superficial
+    G = z_2.Z2
+    # Tensor de reflexão
+    R = np.linalg.inv((z_1.Z1 - G))@(G - z_1.Z2)
     pass
