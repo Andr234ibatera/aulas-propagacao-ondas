@@ -57,6 +57,7 @@ class Medium(ABC):
         """
         return self._theta
     
+    # TODO o grau só varia de 0 a 90
     @theta.setter
     def theta(self, angle) -> None:
         """Setter of the `theta` property
@@ -96,7 +97,7 @@ class Medium(ABC):
         return self.omega/self.vp
     
     @property
-    def k_x(self) -> float: #TODO verificar se o Kx pode ser a fórmula ou tem que ser o mesmo para todas as camadas
+    def k_x(self) -> float: #TODO Precisa forçar que o kx possa ser passado diretamente, pois precisa garantir continuidade
         """_summary_ Get definitions with the group
 
         Returns:
@@ -114,7 +115,7 @@ class Medium(ABC):
         return self.omega/self.vs
     
     @property
-    def k_zt(self) -> Union[np.float64, np.complex128]:
+    def k_zt(self) -> Union[np.float64, np.complex128]:#TODO Precisa forçar que o k_zt possa ser passado diretamente, pois precisa garantir continuidade
         """_summary_ Get definitions with the group
 
         Returns:
@@ -123,7 +124,7 @@ class Medium(ABC):
         return np.emath.sqrt((self.k_t**2) - (self.k_x**2))
     
     @property
-    def k_zl(self) -> Union[np.float64, np.complex128]:
+    def k_zl(self) -> Union[np.float64, np.complex128]:#TODO Precisa forçar que o k_zl possa ser passado diretamente, pois precisa garantir continuidade
         """_summary_  Get definitions with the group
 
         Returns:

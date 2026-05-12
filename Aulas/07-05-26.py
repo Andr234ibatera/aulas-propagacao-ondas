@@ -33,17 +33,21 @@ k2_zt = np.emath.sqrt((k2_t**2) - (k_x**2)) # pode ser complexo
 k2_zl = np.emath.sqrt((k2_l**2) - (k_x**2)) # pode ser complexo
 # A2_1 (Matriz A do meio superior associado a onda indo para cima)
 # sin(theta_l) = k_x/k2_l [isso é A1_11]
+sin_theta_l2 = k_x/k2_l
 # -cos(theta_t) = -(k2_zt/k2_t) [isso é A1_12]
+cos_theta_t2 = k2_zt/k2_t
 # 0 [isso é A1_13, A1_21, A1_22, A1_33]
 # 1 [isso é A1_23]
 # cos(theta_l) = k2_zl/k2_l [isso é A1_31]
+cos_theta_l2 = k2_zl/k2_l
 # sin(theta_t) = k_x/k2_t [isso é A1_32]
+sin_theta_t2 = k_x/k2_t
 # Quando montar a matriz A precisa considerar que é complexo
 A2_1 = np.array([
-    [k_x/k2_l,      -(k2_zt/k2_t),      0.0 + 0.0j],
+    [sin_theta_l2,      -cos_theta_t2,      0.0 + 0.0j],
     [0.0 + 0.0j,    0.0 + 0.0j,         1.0 + 0.0j],
-    [k2_zl/k2_l,    k_x/k2_t,           0.0 + 0.0j]
-], dtype=np.complex64)
+    [cos_theta_l2,    sin_theta_t2,           0.0 + 0.0j]
+], dtype=np.complex128)
 
 # A2_2 (Matriz A do meio superior associado a onda indo para baixo)
 # sin(theta_l) = k_x/k2_l [isso é A2_11]
@@ -52,11 +56,7 @@ A2_1 = np.array([
 # 1 [isso é A2_23]
 # -cos(theta_l) = -(k2_zl/k2_l) [isso é A2_31]
 # -sin(theta_t) = -(k_x/k2_t) [isso é A2_32]
-A2_2 = np.array([
-    [k_x/k2_l,      -(k2_zt/k2_t),      0.0 + 0.0j],
-    [0.0 + 0.0j,    0.0 + 0.0j,         1.0 + 0.0j],
-    [-k2_zl/k2_l,   -k_x/k2_t,          0.0 + 0.0j]
-], dtype=np.complex64)
+A2_2 = A2_1 * np.array([[1,1,1],[1,1,1],[-1,-1,1]])
 
 
 # Meio inferior
@@ -67,17 +67,21 @@ k1_zl = np.emath.sqrt((k1_l**2) - (k_x**2)) # pode ser complexo
 
 # A1_1 (Matriz A do meio inferior associado a onda indo para cima)
 # sin(theta_l) = k1_x/k1_l [isso é A1_11]
+sin_theta_l1 = k_x/k1_l
 # -cos(theta_t) = -(k1_zt/k1_t) [isso é A1_12]
+cos_theta_t1 = k1_zt/k1_t
 # 0 [isso é A1_13, A1_21, A1_22, A1_33]
 # 1 [isso é A1_23]
 # cos(theta_l) = k1_zl/k1_l [isso é A1_31]
+cos_theta_l1 = k1_zl/k1_l
 # sin(theta_t) = k_x/k1_t [isso é A1_32]
+sin_theta_t1 = k_x/k1_t
 # Quando montar a matriz A precisa considerar que é complexo
 A1_1 = np.array([
-    [k_x/k1_l,     -(k1_zt/k1_t),   0.0 + 0.0j],
+    [sin_theta_l1,     -cos_theta_t1,   0.0 + 0.0j],
     [0.0 + 0.0j,    0.0 + 0.0j,     1.0 + 0.0j],
-    [k1_zl/k1_l,    k_x/k1_t,       0.0 + 0.0j]
-], dtype=np.complex64)
+    [cos_theta_l1,    sin_theta_t1,       0.0 + 0.0j]
+], dtype=np.complex128)
 
 # A1_2 (Matriz A do meio inferior associado a onda indo para baixo)
 # sin(theta_l) = k1_x/k1_l [isso é A2_11]
@@ -86,16 +90,49 @@ A1_1 = np.array([
 # 1 [isso é A2_23]
 # -cos(theta_l) = -(k1_zl/k1_l) [isso é A2_31]
 # -sin(theta_t) = -(k_x/k1_t) [isso é A2_32]
-A1_2 = np.array([
-    [k_x/k1_l,      -(k1_zt/k1_t),  0.0 + 0.0j],
-    [0.0 + 0.0j,    0.0 + 0.0j,     1.0 + 0.0j],
-    [-k1_zl/k1_l,   -k_x/k1_t,      0.0 + 0.0j]
-], dtype=np.complex64)
+A1_2 = A1_1 * np.array([[1,1,1],[1,1,1],[-1,-1,1]])
 
 
 C_p = 1.0 #(amplitude onda C_p=1)
 u_down =  np.array([[C_p*np.sin(theta_i)], [0.0], [-C_p*np.cos(theta_i)]], dtype=np.float64) # Vetor campo de deslocamento descendo (amplitude onda C_p=1)
 
+# Matriz que relaciona as amplitudes ao traction vector do meio 1
+L1_1 = np.array([
+    [Lambda_1 * (k1_zl*cos_theta_l1+k_x*sin_theta_l1) + 2*mu_1*k1_zl*cos_theta_l1,
+     Lambda_1 * (k1_zt*sin_theta_t1 - k_x*cos_theta_t1) + 2*mu_1*k1_zt*sin_theta_t1,
+     0.0 + 0.0j],
+    [mu_1*(k_x*cos_theta_l1 + k1_zl*sin_theta_l1),
+     mu_1*(k_x*sin_theta_t1 - k1_zt*cos_theta_t1),
+     0.0 + 0.0j],
+    [0.0 + 0.0j, 0.0 + 0.0j, mu_1*k1_zt]
+], dtype=np.complex128)
+
+L1_2 = L1_1 * np.array([[1,1,1],[-1,-1,1],[1,1,-1]])
+
+# Matriz que relaciona as amplitudes ao traction vector do meio 2
+L2_1 = np.array([
+    [Lambda_2 * (k2_zl*cos_theta_l2+k_x*sin_theta_l2) + 2*mu_2*k2_zl*cos_theta_l2,
+     Lambda_2 * (k2_zt*sin_theta_t2 - k_x*cos_theta_t2) + 2*mu_2*k2_zt*sin_theta_t2,
+     0.0 + 0.0j],
+    [mu_2*(k_x*cos_theta_l2 + k2_zl*sin_theta_l2),
+     mu_2*(k_x*sin_theta_t2 - k2_zt*cos_theta_t2),
+     0.0 + 0.0j],
+    [0.0 + 0.0j, 0.0 + 0.0j, mu_2*k2_zt]
+], dtype=np.complex128)
+
+L2_2 = L2_1 * np.array([[1,1,1],[-1,-1,1],[1,1,-1]])
+
+# Tensor de Impedância local
+Z1_1 = -(1/omega)*L1_1@np.linalg.inv(A1_1)
+Z1_2 = -(1/omega)*L1_2@np.linalg.inv(A1_2)
+Z2_1 = -(1/omega)*L2_1@np.linalg.inv(A2_1)
+Z2_2 = -(1/omega)*L2_2@np.linalg.inv(A2_2)
+
+# Tensor de impedância superficial
+G = Z2_2
+
+# Tensor de reflexão
+R = np.linalg.inv((Z1_1 - G))@(G - Z1_2)
 
 if __name__ == "__main__":
     pass
