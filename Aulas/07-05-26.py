@@ -17,10 +17,12 @@ rho_1 = 2500 # Kg/m**3
 
 # Constantes de Lamé
 mu_1 = (vs_1**2)*rho_1
-mu_2 = (vs_2**2)*rho_2
+# mu_2 = (vs_2**2)*rho_2
+mu_2 = 10.0e3 # Pa
 
 Lambda_1 = ((vp_1**2)*rho_1) - (2*mu_1)
-Lambda_2 = ((vp_2**2)*rho_2) - (2*mu_2)
+# Lambda_2 = ((vp_2**2)*rho_2) - (2*mu_2)
+Lambda_2 = mu_2  # Pa
 
 # Campo de deslocamento
 theta_i = (30*np.pi)/180 # angulo de incidência 30 graus
@@ -129,10 +131,15 @@ Z2_1 = -(1/omega)*L2_1@np.linalg.inv(A2_1)
 Z2_2 = -(1/omega)*L2_2@np.linalg.inv(A2_2)
 
 # Tensor de impedância superficial
-G = Z2_2
+# G = Z1_2
+G = np.array([
+    [0.0 + 0.0j, 0.0 + 0.0j, 0.0 + 0.0j],
+    [0.0 + 0.0j, 0.0 + 0.0j, 0.0 + 0.0j],
+    [0.0 + 0.0j, 0.0 + 0.0j, 0.0 + 0.0j]
+])
 
 # Tensor de reflexão
-R = np.linalg.inv((Z1_1 - G))@(G - Z1_2)
+R = np.linalg.inv((Z2_1 - G))@(G - Z2_2)
 
 if __name__ == "__main__":
     pass
