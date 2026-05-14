@@ -25,6 +25,9 @@ class Medium(ABC):
         self._k_x: float = None
         self._k_zt: Union[np.float64, np.complex128] = None
         self._k_zl: Union[np.float64, np.complex128] = None
+        # Lamé Constants
+        self._lame_mu = None
+        self._lame_lambda = None
         
         
     @property
@@ -38,7 +41,19 @@ class Medium(ABC):
         Returns:
             float: returns the second Lamé parameter, also called the shear modulus or modulus of rigidity.
         """
-        return (self.vs**2)*self.rho
+        return self._lame_mu if self._lame_mu else (self.vs**2)*self.rho
+    
+    @lame_mu.setter
+    def lame_mu(self, new_lame_mu) -> None:
+        """_summary_
+
+        Args:
+            new_lame_mu (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        self._lame_mu = new_lame_mu
     
     @property
     def lame_lambda(self) -> float:
@@ -51,7 +66,19 @@ class Medium(ABC):
         Returns:
             float: returns the first Lamé parameter and represents pure incompressibility.
         """
-        return ((self.vp**2)*self.rho) - (2*self.lame_mu)
+        return self._lame_lambda if self._lame_lambda else ((self.vp**2)*self.rho) - (2*self.lame_mu)
+    
+    @lame_lambda.setter
+    def lame_lambda(self, new_lame_lambda) -> None:
+        """_summary_
+
+        Args:
+            new_lame_lambda (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        self._lame_lambda = new_lame_lambda
     
     @property
     def theta(self) -> float:
@@ -300,31 +327,80 @@ class LocalImpedanceTensor(ABC):
 
     
 if __name__ == "__main__":
-    # Medium from the top
-    medium_2 = Medium(vp=2000.0, vs=1500.0, rho=5000.0)
-    medium_2.theta = 30.0
-    medium_2.omega = 100.0
-    # Medium from the botton
-    medium_1 = Medium(vp=1000.0, vs=700.0, rho=2500.0)
-    medium_1.theta = 30.0
-    medium_1.omega = 100.0
-    medium_1.k_x = medium_2.k_x
-    # Displacement Matriz from the top
-    disp_2 = DisplacementPolarizationMatriz(medium=medium_2)
-    # Displacement Matriz from the botton
-    disp_1 = DisplacementPolarizationMatriz(medium=medium_1)
-    # L Matriz from the top
-    l_2 = LMatriz(medium=medium_2, displacement=disp_2)
-    # L Matriz from the botton
-    l_1 = LMatriz(medium=medium_1, displacement=disp_1)
-    # Local Impedance Tensor from the top
-    z_2 = LocalImpedanceTensor(medium=medium_2, displacement=disp_2, l_matriz=l_2)
-    # Local Impedance Tensor from the botton
-    z_1 = LocalImpedanceTensor(medium=medium_1, displacement=disp_1, l_matriz=l_1)
+    # # Medium from the top
+    # medium_2 = Medium(vp=2000.0, vs=1500.0, rho=5000.0)
+    # medium_2.theta = 30.0
+    # medium_2.omega = 100.0
+    # # Medium from the botton
+    # medium_1 = Medium(vp=1000.0, vs=700.0, rho=2500.0)
+    # medium_1.theta = 30.0
+    # medium_1.omega = 100.0
+    # medium_1.k_x = medium_2.k_x
+    # # Displacement Matriz from the top
+    # disp_2 = DisplacementPolarizationMatriz(medium=medium_2)
+    # # Displacement Matriz from the botton
+    # disp_1 = DisplacementPolarizationMatriz(medium=medium_1)
+    # # L Matriz from the top
+    # l_2 = LMatriz(medium=medium_2, displacement=disp_2)
+    # # L Matriz from the botton
+    # l_1 = LMatriz(medium=medium_1, displacement=disp_1)
+    # # Local Impedance Tensor from the top
+    # z_2 = LocalImpedanceTensor(medium=medium_2, displacement=disp_2, l_matriz=l_2)
+    # # Local Impedance Tensor from the botton
+    # z_1 = LocalImpedanceTensor(medium=medium_1, displacement=disp_1, l_matriz=l_1)
     
-    # TODO esperar a próxima aula para identificar onde colocar G e R, talvez pode ser definido dentro de uma classe com arrays de camadas
-    # Tensor de impedância superficial
-    G = z_2.Z2
-    # Tensor de reflexão
-    R = np.linalg.inv((z_1.Z1 - G))@(G - z_1.Z2)
+    # G = np.array([
+    #     [0.0 + 0.0j, 0.0 + 0.0j, 0.0 + 0.0j],
+    #     [0.0 + 0.0j, 0.0 + 0.0j, 0.0 + 0.0j],
+    #     [0.0 + 0.0j, 0.0 + 0.0j, 0.0 + 0.0j]
+    # ])
+    
+    # R = np.linalg.inv((z_2.Z1 - G))@(G - z_2.Z2)
+    # pass
+    
+    mediums_2 = list(map(lambda x: Medium(vp=2000.0, vs=1500.0, rho=5000.0), range(0, 91)))
+    list(map(lambda m, x: m.__setattr__("theta", float(x)), mediums_2, range(0, 91)))
+    list(map(lambda m: m.__setattr__("omega", 100.0), mediums_2))
+    list(map(lambda m: m.__setattr__('lame_mu', 10.0e3), mediums_2))
+    list(map(lambda m: m.__setattr__('lame_lambda', m.lame_mu), mediums_2))
+    
+    mediums_1 = list(map(lambda x: Medium(vp=1000.0, vs=700.0, rho=2500.0), range(0, 91)))
+    list(map(lambda m1, x: m1.__setattr__("theta", x), mediums_1, range(0, 91)))
+    list(map(lambda m1: m1.__setattr__("omega", 100.0), mediums_1))
+    list(map(lambda m1, m2: m1.__setattr__("k_x", m2.k_x), mediums_1, mediums_2))
+    
+    disps_2 = list(map(lambda m: DisplacementPolarizationMatriz(medium=m), mediums_2))
+    # # Displacement Matriz from the botton
+    disps_1 = list(map(lambda m: DisplacementPolarizationMatriz(medium=m), mediums_1))
+    # # L Matriz from the top
+    ls_2 = list(map(lambda m, d: LMatriz(medium=m, displacement=d), mediums_2, disps_2))
+    # # L Matriz from the botton
+    ls_1 = list(map(lambda m, d: LMatriz(medium=m, displacement=d), mediums_1, disps_1))
+    # # Local Impedance Tensor from the top
+    zs_2 = list(map(lambda m, d, l: LocalImpedanceTensor(medium=m, displacement=d, l_matriz=l), mediums_2, disps_2, ls_2))
+    # # Local Impedance Tensor from the botton
+    zs_1 = list(map(lambda m, d, l: LocalImpedanceTensor(medium=m, displacement=d, l_matriz=l), mediums_1, disps_1, ls_1))
+    
+    G = np.array([
+        [0.0 + 0.0j, 0.0 + 0.0j, 0.0 + 0.0j],
+        [0.0 + 0.0j, 0.0 + 0.0j, 0.0 + 0.0j],
+        [0.0 + 0.0j, 0.0 + 0.0j, 0.0 + 0.0j]
+    ])
+    
+    # R = np.linalg.inv((Z2_1 - G))@(G - Z2_2)
+    Rs = list(map(lambda z2: np.linalg.inv((z2.Z1 - G))@(G - z2.Z2), zs_2))
+    
+    C_p = 1.0 + 0.0j #(amplitude onda C_p=1)
+    Us_2 = list(map(lambda m: np.array([
+        [C_p*np.sin(m.theta), 0.0 + 0.0j, -C_p*np.cos(m.theta)]
+    ], dtype=np.complex128), mediums_2))
+
+    Us_1 = list(map(lambda r, u2: r@u2.T, Rs, Us_2))
+    
+    Cs_1 = list(map(lambda u, d: np.linalg.inv(d.A1)@u, Us_1, disps_2))
+    
+
+
+    # TODO Levando em consideração C_alpha = (A_alpha)^-1@U_alpha plotar o C_alpha para o meio superior
+    
     pass
