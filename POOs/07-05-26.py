@@ -1,6 +1,7 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
-from typing import Union, Optional
+from typing import Union, Optional, List
 from abc import ABC
 from enum import Enum
 
@@ -283,7 +284,7 @@ class LMatriz(ABC):
             0.0 + 0.0j],
             [0.0 + 0.0j, 0.0 + 0.0j, self.m.lame_mu*self.m.k_zt]
         ])
-    
+        
     @property
     def L2(self) -> np.array:
         """_summary_
@@ -325,47 +326,58 @@ class LocalImpedanceTensor(ABC):
     def __str__(self) -> str:
         return f"Z1\n{self.Z1}\nZ2\n{self.Z2}"
 
+def lineplot(vetores: List[np.array], thetas: List[float]) -> None:
+    angles = list(map(lambda t: (t*180)/np.pi, thetas))
+    
+    onda_P = np.array([v[0, 0] for v in vetores])
+    onda_Sv = np.array([-v[1, 0] for v in vetores])
+    onda_Sh = np.array([v[2, 0] for v in vetores])
+
+    # =====================================================================
+    # 3. CRIANDO A VISUALIZAÇÃO
+    # =====================================================================
+    # Criando a figura e os eixos (1 linha, 2 colunas)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+
+    # --- Plot da Esquerda: Parte Real ---
+    ax1.plot(angles, onda_P.real, label='Onda P', color='blue')
+    ax1.plot(angles, onda_Sv.real, label='Onda Sv', color='orange')
+    ax1.plot(angles, onda_Sh.real, label='Onda Sh', color='green')
+    ax1.set_title('Parte Real da Amplitude das Ondas')
+    ax1.set_xlabel('Angulo em Graus')
+    ax1.set_ylabel('Amplitude das Ondas')
+    ax1.grid(True, linestyle='--', alpha=0.7)
+    ax1.legend()
+
+    # --- Plot da Direita: Parte Imaginária ---
+    ax2.plot(angles, onda_P.imag, label='Onda P', color='blue')
+    ax2.plot(angles, onda_Sv.imag, label='Onda Sv', color='orange')
+    ax2.plot(angles, onda_Sh.imag, label='Onda Sh', color='green')
+    ax2.set_title('Parte Imaginária da Amplitude das Ondas')
+    ax2.set_xlabel('Angulo em Graus')
+    ax2.set_ylabel('Amplitude das Ondas')
+    ax2.grid(True, linestyle='--', alpha=0.7)
+    ax2.legend()
+
+    # Ajusta o layout para que os gráficos não fiquem sobrepostos
+    plt.tight_layout()
+
+    # Exibe o gráfico
+    plt.show()
     
 if __name__ == "__main__":
-    # # Medium from the top
-    # medium_2 = Medium(vp=2000.0, vs=1500.0, rho=5000.0)
-    # medium_2.theta = 30.0
-    # medium_2.omega = 100.0
-    # # Medium from the botton
-    # medium_1 = Medium(vp=1000.0, vs=700.0, rho=2500.0)
-    # medium_1.theta = 30.0
-    # medium_1.omega = 100.0
-    # medium_1.k_x = medium_2.k_x
-    # # Displacement Matriz from the top
-    # disp_2 = DisplacementPolarizationMatriz(medium=medium_2)
-    # # Displacement Matriz from the botton
-    # disp_1 = DisplacementPolarizationMatriz(medium=medium_1)
-    # # L Matriz from the top
-    # l_2 = LMatriz(medium=medium_2, displacement=disp_2)
-    # # L Matriz from the botton
-    # l_1 = LMatriz(medium=medium_1, displacement=disp_1)
-    # # Local Impedance Tensor from the top
-    # z_2 = LocalImpedanceTensor(medium=medium_2, displacement=disp_2, l_matriz=l_2)
-    # # Local Impedance Tensor from the botton
-    # z_1 = LocalImpedanceTensor(medium=medium_1, displacement=disp_1, l_matriz=l_1)
-    
-    # G = np.array([
-    #     [0.0 + 0.0j, 0.0 + 0.0j, 0.0 + 0.0j],
-    #     [0.0 + 0.0j, 0.0 + 0.0j, 0.0 + 0.0j],
-    #     [0.0 + 0.0j, 0.0 + 0.0j, 0.0 + 0.0j]
-    # ])
-    
-    # R = np.linalg.inv((z_2.Z1 - G))@(G - z_2.Z2)
-    # pass
-    
-    mediums_2 = list(map(lambda x: Medium(vp=2000.0, vs=1500.0, rho=5000.0), range(0, 91)))
+    mediums_2 = list(map(lambda x: Medium(
+        vp=(np.emath.sqrt((10.0e3+2*10.0e3)/5000.0)), 
+        vs=(np.emath.sqrt(10.0e3/5000.0)), 
+        rho=5000.0)
+    , range(0, 91)))
     list(map(lambda m, x: m.__setattr__("theta", float(x)), mediums_2, range(0, 91)))
     list(map(lambda m: m.__setattr__("omega", 100.0), mediums_2))
     list(map(lambda m: m.__setattr__('lame_mu', 10.0e3), mediums_2))
     list(map(lambda m: m.__setattr__('lame_lambda', m.lame_mu), mediums_2))
     
-    mediums_1 = list(map(lambda x: Medium(vp=1000.0, vs=700.0, rho=2500.0), range(0, 91)))
-    list(map(lambda m1, x: m1.__setattr__("theta", x), mediums_1, range(0, 91)))
+    mediums_1 = list(map(lambda x: Medium(vp=0.0, vs=0.0, rho=0.0), range(0, 91)))
+    list(map(lambda m1, x: m1.__setattr__("theta", float(x)), mediums_1, range(0, 91)))
     list(map(lambda m1: m1.__setattr__("omega", 100.0), mediums_1))
     list(map(lambda m1, m2: m1.__setattr__("k_x", m2.k_x), mediums_1, mediums_2))
     
@@ -387,20 +399,19 @@ if __name__ == "__main__":
         [0.0 + 0.0j, 0.0 + 0.0j, 0.0 + 0.0j]
     ])
     
-    # R = np.linalg.inv((Z2_1 - G))@(G - Z2_2)
     Rs = list(map(lambda z2: np.linalg.inv((z2.Z1 - G))@(G - z2.Z2), zs_2))
     
     C_p = 1.0 + 0.0j #(amplitude onda C_p=1)
     Us_2 = list(map(lambda m: np.array([
-        [C_p*np.sin(m.theta)], [0.0 + 0.0j], [-C_p*np.cos(m.theta)]
+        [C_p*np.sin(m.theta)], [0.0 + 0.0j], [-(C_p*np.cos(m.theta))]
     ], dtype=np.complex128), mediums_2))
 
     Us_1 = list(map(lambda r, u2: r@u2, Rs, Us_2))
     
-    Cs_1 = list(map(lambda u, d: np.linalg.inv(d.A1)@u, Us_1, disps_2))
+    Cps_1 = list(map(lambda u, d: np.linalg.inv(d.A1)@u, Us_1, disps_2))
     
-
-
     # TODO Levando em consideração C_alpha = (A_alpha)^-1@U_alpha plotar o C_alpha para o meio superior
+    
+    lineplot(vetores=Cps_1, thetas=list(map(lambda m: m.theta, mediums_2)))
     
     pass
