@@ -392,10 +392,10 @@ if __name__ == "__main__":
     
     C_p = 1.0 + 0.0j #(amplitude onda C_p=1)
     Us_2 = list(map(lambda m: np.array([
-        [C_p*np.sin(m.theta), 0.0 + 0.0j, -C_p*np.cos(m.theta)]
+        [C_p*np.sin(m.theta)], [0.0 + 0.0j], [-C_p*np.cos(m.theta)]
     ], dtype=np.complex128), mediums_2))
 
-    Us_1 = list(map(lambda r, u2: r@u2.T, Rs, Us_2))
+    Us_1 = list(map(lambda r, u2: r@u2, Rs, Us_2))
     
     Cs_1 = list(map(lambda u, d: np.linalg.inv(d.A1)@u, Us_1, disps_2))
     
