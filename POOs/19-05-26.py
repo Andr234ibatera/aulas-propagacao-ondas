@@ -322,7 +322,7 @@ class LocalImpedanceTensor(ABC):
             np.array: returns a 3x3 `np.array` of `dtype=np.complex128`
         """
         return -(1/self.m.omega) * self.l.L2 @ np.linalg.inv(self.d.A2)
-    
+        
     def __str__(self) -> str:
         return f"Z1\n{self.Z1}\nZ2\n{self.Z2}"
 
@@ -338,6 +338,7 @@ class PhiMatriz(ABC):
         self.m = medium
         self.h = h
     
+    @property
     def Phi1(self) -> np.array:
         """_summary_
 
@@ -350,6 +351,7 @@ class PhiMatriz(ABC):
             [0.0 + 0.0j, 0.0 + 0.0j, np.exp(self.m.k_zt*self.h*1.0j)],
         ], dtype=np.complex128)
     
+    @property
     def Phi2(self) -> np.array:
         """_summary_
 
@@ -361,6 +363,46 @@ class PhiMatriz(ABC):
             [0.0 + 0.0j, np.exp(-self.m.k_zt*self.h*1.0j), 0.0 + 0.0j],
             [0.0 + 0.0j, 0.0 + 0.0j, np.exp(-self.m.k_zt*self.h*1.0j)],
         ], dtype=np.complex128)
+    
+    def __str__(self) -> str:
+        return f"Ph1\n{self.Phi1}\nPh2\n{self.Phi2}"
+    
+
+class MMatriz(ABC):
+    def __init__(self, displacement: DisplacementPolarizationMatriz, phi: PhiMatriz):
+        super().__init__()
+        self.d: DisplacementPolarizationMatriz = displacement
+        self.p: PhiMatriz = phi
+    
+    @property
+    def M1(self) -> np.array:
+        """_summary_
+
+        Returns:
+            np.array: _description_
+        """
+        return self.d.A1 @ self.p.Phi1 @ np.linalg.inv(self.d.A1)
+    
+    @property
+    def M2(self):
+        """_summary_
+
+        Returns:
+            _type_: _description_
+        """
+        return self.d.A2 @ self.p.Phi2 @ np.linalg.inv(self.d.A2)
+    
+    @property
+    def M2Minus(self):
+        """_summary_
+
+        Returns:
+            _type_: _description_
+        """
+        return self.d.A2 @ self.p.Phi1 @ np.linalg.inv(self.d.A2)
+    
+    def __str__(self) -> str:
+        return f"M1\n{self.M1}\nM2\n{self.M2}\nM2Minus\n{self.M2Minus}"
 
 
 def lineplot(vetores: List[np.array], thetas: List[float]) -> None:
@@ -404,11 +446,11 @@ def lineplot(vetores: List[np.array], thetas: List[float]) -> None:
     
 if __name__ == "__main__":
     medium_data = {
-        'm_5': {'vp': 1700.0, 'vs': 1000.0, 'rho': 2000.0, 'h': np.inf},
-        'm_4': {'vp': 3500.0, 'vs': 1343.0, 'rho': 3000.0, 'h': 2.0},
-        'm_3': {'vp': 5000.0, 'vs': 2000.0, 'rho': 4000.0, 'h': 0.7},
-        'm_2': {'vp': 2000.0, 'vs': 1500.0, 'rho': 5000.0, 'h': 1.0},
-        'm_1': {'vp': 1000.0, 'vs': 700.0, 'rho': 2500.0, 'h': np.inf},
+        '5': {'vp': 1700.0, 'vs': 1000.0, 'rho': 2000.0, 'h': np.inf},
+        '4': {'vp': 3500.0, 'vs': 1343.0, 'rho': 3000.0, 'h': 2.0},
+        '3': {'vp': 5000.0, 'vs': 2000.0, 'rho': 4000.0, 'h': 0.7},
+        '2': {'vp': 2000.0, 'vs': 1500.0, 'rho': 5000.0, 'h': 1.0},
+        '1': {'vp': 1000.0, 'vs': 700.0, 'rho': 2500.0, 'h': np.inf},
     }
     
     # Definindo os meios
@@ -417,9 +459,9 @@ if __name__ == "__main__":
     for i in range(5,0,-1):
         medium_temp = list(map(lambda x: 
             Medium(
-                vp=medium_data[f'm_{i}']['vp'], 
-                vs=medium_data[f'm_{i}']['vs'], 
-                rho=medium_data[f'm_{i}']['rho']), range(0, 91)))
+                vp=medium_data[str(i)]['vp'], 
+                vs=medium_data[str(i)]['vs'], 
+                rho=medium_data[str(i)]['rho']), range(0, 91)))
         list(map(lambda m, i: m.__setattr__("theta", float(i)), medium_temp, range(0, 91)))
         list(map(lambda m: m.__setattr__("omega", 100.0), medium_temp))
         
@@ -428,41 +470,52 @@ if __name__ == "__main__":
         else:
             k_x = list(map(lambda m: m.k_x, medium_temp))
         
-        mediums.update({f'{i}': medium_temp})
+        mediums.update({str(i): medium_temp})
     
     # Definindo as matrizes de deslocamento
     displacements = dict()
     for i in range(5,0,-1):
-        displacements.update({f'{i}':
-            list(map(lambda m: DisplacementPolarizationMatriz(medium=m), mediums[f'{i}']))})
+        displacements.update({str(i):
+            list(map(lambda m: DisplacementPolarizationMatriz(medium=m), mediums[str(i)]))})
     
     # L Matriz from the top to bottom
     ls = dict()
     for i in range(5,0,-1):
-        ls.update({f'{i}':
-            list(map(lambda m, d: LMatriz(medium=m, displacement=d), mediums[f'{i}'], displacements[f'{i}']))})
+        ls.update({str(i):
+            list(map(lambda m, d: LMatriz(medium=m, displacement=d), mediums[str(i)], displacements[str(i)]))})
     
     # Local Impedance Tensor from the top to bottom
     zs = dict()
     for i in range(5,0,-1):
-        zs.update({f'{i}':
-            list(map(lambda m, d, l: LocalImpedanceTensor(medium=m, displacement=d, l_matriz=l), mediums[f'{i}'], displacements[f'{i}'], ls[f'{i}']))})
+        zs.update({str(i):
+            list(map(lambda m, d, l: LocalImpedanceTensor(medium=m, displacement=d, l_matriz=l), mediums[str(i)], displacements[str(i)], ls[str(i)]))})
     
-    # Defining Ms Matriz
+    # Defining Phis for the layer 2 to 4
+    phis = dict()
+    for i in range(2,5):
+        phis.update({str(i): list(map(lambda m: PhiMatriz(medium=m, h=medium_data[str(i)]['h']), mediums[str(i)]))})
     
-    
-    # Defining Gs
-    # Gs = dict()
-    # for i in range(1,4):
-    #     if len(Gs) > 0:
-            
-    #         # temp = zs[str(i)].Z1@
-    #     else:
-    #         Gs.update({str(i): zs[str(i)].Z2})
-    
+    # Defining MMatraiz for layers 2 to 4
+    ms = dict()
+    for i in range(2,5):
+        ms.update({str(i): list(map(lambda d, p: MMatriz(displacement=d, phi=p), displacements[str(i)], phis[str(i)]))})
+        
+    # Defining Gs, Rs, Ws
+    gs = dict()
+    rs = dict()
+    gs.update({'1': list(map(lambda z: z.Z2, zs['1']))})
+    rs.update({'1': list(map(lambda z, g: np.linalg.inv((z.Z1 - g))@(g - z.Z2), zs['2'], gs['1']))})
+    ws = dict()
+    for i in range(2,5):
+        w_temp = list(map(lambda m, r: m.M1 @ r @ m.M2Minus, ms[str(i)], rs[str(i-1)]))
+        ws.update({str(i): w_temp})
+        g_temp = list(map(lambda z, w: (z.Z1@w+z.Z2) @ np.linalg.inv(w+np.identity(z.Z2.shape[0])), zs[str(i)], w_temp))
+        gs.update({str(i): g_temp})
+        rs.update({str(i): list(map(lambda z, g: np.linalg.inv((z.Z1 - g))@(g - z.Z2), zs[str(i+1)], g_temp))})
+        
     pass    
     
-    # Rs = list(map(lambda z2: np.linalg.inv((z2.Z1 - G))@(G - z2.Z2), zs_2))
+    
     
     # C_p = 1.0 + 0.0j #(amplitude onda C_p=1)
     # Us_2 = list(map(lambda m: np.array([
