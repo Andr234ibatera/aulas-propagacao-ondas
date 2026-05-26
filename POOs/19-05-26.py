@@ -419,9 +419,9 @@ def lineplot(vetores: List[np.array], thetas: List[float]) -> None:
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
     # --- Plot da Esquerda: Parte Real ---
-    ax1.plot(angles, onda_P.real, label='Onda P', color='blue')
-    ax1.plot(angles, onda_Sv.real, label='Onda Sv', color='orange')
-    ax1.plot(angles, onda_Sh.real, label='Onda Sh', color='green')
+    ax1.plot(angles, onda_P.real, label='Ux', color='blue')
+    ax1.plot(angles, onda_Sv.real, label='Uy', color='orange')
+    ax1.plot(angles, onda_Sh.real, label='Uz', color='green')
     ax1.set_title('Parte Real da Amplitude das Ondas')
     ax1.set_xlabel('Angulo em Graus')
     ax1.set_ylabel('Amplitude das Ondas')
@@ -429,9 +429,9 @@ def lineplot(vetores: List[np.array], thetas: List[float]) -> None:
     ax1.legend()
 
     # --- Plot da Direita: Parte Imaginária ---
-    ax2.plot(angles, onda_P.imag, label='Onda P', color='blue')
-    ax2.plot(angles, onda_Sv.imag, label='Onda Sv', color='orange')
-    ax2.plot(angles, onda_Sh.imag, label='Onda Sh', color='green')
+    ax2.plot(angles, onda_P.imag, label='Ux', color='blue')
+    ax2.plot(angles, onda_Sv.imag, label='Uy', color='orange')
+    ax2.plot(angles, onda_Sh.imag, label='Uz', color='green')
     ax2.set_title('Parte Imaginária da Amplitude das Ondas')
     ax2.set_xlabel('Angulo em Graus')
     ax2.set_ylabel('Amplitude das Ondas')
@@ -463,7 +463,7 @@ if __name__ == "__main__":
                 vs=medium_data[str(i)]['vs'], 
                 rho=medium_data[str(i)]['rho']), range(0, 91)))
         list(map(lambda m, i: m.__setattr__("theta", float(i)), medium_temp, range(0, 91)))
-        list(map(lambda m: m.__setattr__("omega", 100.0), medium_temp))
+        list(map(lambda m: m.__setattr__("omega", 100.0/(2*np.pi)), medium_temp)) # Compensando o valor da frequencia para omega ser 100.0
         
         if k_x:
             list(map(lambda m, k: m.__setattr__("k_x", k), medium_temp, k_x))
@@ -512,22 +512,24 @@ if __name__ == "__main__":
         g_temp = list(map(lambda z, w: (z.Z1@w+z.Z2) @ np.linalg.inv(w+np.identity(z.Z2.shape[0])), zs[str(i)], w_temp))
         gs.update({str(i): g_temp})
         rs.update({str(i): list(map(lambda z, g: np.linalg.inv((z.Z1 - g))@(g - z.Z2), zs[str(i+1)], g_temp))})
-        
-    pass    
     
-    
-    
-    # C_p = 1.0 + 0.0j #(amplitude onda C_p=1)
+    # Campo de deslocamento refletido 
     # Us_2 = list(map(lambda m: np.array([
     #     [C_p*np.sin(m.theta)], [0.0 + 0.0j], [-(C_p*np.cos(m.theta))]
     # ], dtype=np.complex128), mediums_2))
-
-    # Us_1 = list(map(lambda r, u2: r@u2, Rs, Us_2))
+    us_2 = dict()
+    def U_2(m: Medium):
+        C_p = 1.0 + 0.0j #(amplitude onda C_p=1)
+        return np.array([
+            [C_p*np.sin(m.theta)], [0.0 + 0.0j], [-(C_p*np.cos(m.theta))]
+        ], dtype=np.complex128)
+        
+    us_2.update({'5': list(map(lambda m: U_2(m=m), mediums['5']))})
     
-    # Cps_1 = list(map(lambda u, d: np.linalg.inv(d.A1)@u, Us_1, disps_2))
+    us_1 = dict()
+    us_1.update({'5': list(map(lambda r, u2: r@u2, rs['4'], us_2['5']))})
     
-    # # TODO Levando em consideração C_alpha = (A_alpha)^-1@U_alpha plotar o C_alpha para o meio superior
     
-    # lineplot(vetores=Cps_1, thetas=list(map(lambda m: m.theta, mediums_2)))
+    lineplot(vetores=us_1['5'], thetas=list(map(lambda m: m.theta, mediums['5'])))
     
-    pass
+    pass    
