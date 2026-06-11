@@ -6,6 +6,7 @@ import time
 from typing import Union, Optional, List
 from abc import ABC
 from enum import Enum
+from tqdm import tqdm
 
 
 class Medium(ABC):
@@ -427,19 +428,40 @@ if __name__ == "__main__":
         '1': {'vp': 0.0, 'vs': 0.0, 'rho': 0.0, 'h': np.inf},
     }
     
-    MIN_OMEGA = 1e-3
-    MIN_K = 1e-3
+    DEBUG = True
     
-    MAX_OMEGA = 38.0
-    MAX_K = 22.0
-    
-    DELTA_OMEGA = 1.0
-    DELTA_K = 22*1e-2
-    
+    if DEBUG:
+        MIN_OMEGA = 1e-3
+        MAX_OMEGA = 38.0
+        DELTA_OMEGA = 1.0
+        NUM_OMEGAS = int((MAX_OMEGA - MIN_OMEGA) // DELTA_OMEGA) + 1
+        REAL_LAST_OMEGA = MIN_OMEGA + (NUM_OMEGAS - 1) * DELTA_OMEGA
+        
+        MIN_K = 1e-3
+        MAX_K =  22
+        DELTA_K = 22*1e-2
+        NUM_KS = int((MAX_K - MIN_K) // DELTA_K) + 1
+        REAL_LAST_K = MIN_K + (NUM_KS - 1) * DELTA_K
+    else:
+        # omega do código do professor com guilherme
+        # 1e-4:2.5e-2:14
+        MIN_OMEGA = 1e-4
+        MAX_OMEGA = 14.0
+        DELTA_OMEGA = 2.5e-2
+        NUM_OMEGAS = int((MAX_OMEGA - MIN_OMEGA) // DELTA_OMEGA) + 1
+        REAL_LAST_OMEGA = MIN_OMEGA + (NUM_OMEGAS - 1) * DELTA_OMEGA
+        # kx do código do professor com guilherme
+        # 0.000001:0.0000001:0.001
+        MIN_K = 1e-6
+        MAX_K = 1e-3
+        DELTA_K = 1e-7
+        NUM_KS = int((MAX_K - MIN_K) // DELTA_K) + 1
+        REAL_LAST_K = MIN_K + (NUM_KS - 1) * DELTA_K
+
     THRESHOLD = 1
     
-    omegas = np.linspace(MIN_OMEGA, MAX_OMEGA, 100)
-    ks = np.linspace(MIN_K, MAX_K, 1000)
+    omegas = np.linspace(MIN_OMEGA, REAL_LAST_OMEGA, NUM_OMEGAS)
+    ks = np.linspace(MIN_K, REAL_LAST_K, NUM_KS)
     
     OMEGA_LBL = f"OMEGA min: {MIN_OMEGA} max: {MAX_OMEGA} len: {len(omegas)}"
     KX_LBL = f"KX min: {MIN_K} max: {MAX_K} len: {len(ks)}"
@@ -448,7 +470,7 @@ if __name__ == "__main__":
     
     # Definindo os meios
     mediums = dict()
-    for i in range(3,0,-1):
+    for i in tqdm(range(3,0,-1), desc="Init. Mediums"):
         medium_temp = list(map(lambda item: 
             Medium(
                 vp=medium_data[str(i)]['vp'], 
@@ -461,68 +483,68 @@ if __name__ == "__main__":
         
     # Definindo as matrizes de deslocamento
     displacements = dict()
-    for i in range(3,0,-1):
+    for i in tqdm(range(3,0,-1), desc="Init. Disp. Matrices"):
         displacements.update({str(i):
             list(map(lambda m: DisplacementPolarizationMatriz(medium=m), mediums[str(i)]))})
     
     # L Matriz from the top to bottom
     ls = dict()
-    for i in range(3,0,-1):
+    for i in tqdm(range(3,0,-1), desc="Init. L Matriz"):
         ls.update({str(i):
             list(map(lambda m, d: LMatriz(medium=m, displacement=d), mediums[str(i)], displacements[str(i)]))})
     
     # Local Impedance Tensor from the top to bottom
     zs = dict()
-    for i in range(3,0,-1):
+    for i in tqdm(range(3,0,-1), desc="Init. Local Imp."):
         zs.update({str(i):
             list(map(lambda m, d, l: LocalImpedanceTensor(medium=m, displacement=d, l_matriz=l), mediums[str(i)], displacements[str(i)], ls[str(i)]))})
     
     # Defining Phis for the layer 2 to 3
     phis = dict()
-    for i in range(2,3):
+    for i in tqdm(range(2,3), desc="Init. Phis"):
         phis.update({str(i): list(map(lambda m: PhiMatriz(medium=m, h=medium_data[str(i)]['h']), mediums[str(i)]))})
     
     # Defining MMatraiz for layers 2 to 3
     ms = dict()
-    for i in range(2,3):
+    for i in tqdm(range(2,3), desc="Init. M Matriz"):
         ms.update({str(i): list(map(lambda d, p: MMatriz(displacement=d, phi=p), displacements[str(i)], phis[str(i)]))})
         
     # Defining Gs, Rs, Ws
     gs = dict()
     rs = dict()
-    gs.update({'1': list(map(lambda _: np.array([[x]*3 for x in [0.0 + 0.0j]*3], dtype=np.complex128), zs['1']))})
-    rs.update({'1': list(map(lambda z, g: np.linalg.inv((z.Z1 - g))@(g - z.Z2), zs['2'], gs['1']))})
+    gs.update({'1': list(map(lambda _: np.array([[x]*3 for x in [0.0 + 0.0j]*3], dtype=np.complex128), tqdm(zs['1'], desc="Init. G1")))})
+    rs.update({'1': list(map(lambda z, g: np.linalg.inv((z.Z1 - g))@(g - z.Z2), zs['2'], tqdm(gs['1'], desc="Init. R1")))})
     ws = dict()
-    for i in range(2,3):
+    for i in tqdm(range(2,3), desc="Init. Ws Gs"):
         w_temp = list(map(lambda m, r: m.M1 @ r @ m.M2Minus, ms[str(i)], rs[str(i-1)]))
         ws.update({str(i): w_temp})
         g_temp = list(map(lambda z, w: (z.Z1@w+z.Z2) @ np.linalg.inv(w+np.identity(z.Z2.shape[0])), zs[str(i)], w_temp))
         gs.update({str(i): g_temp})
     
     # Defining G2 determinants
-    dets = list(map(lambda g: np.linalg.det(g), gs['2']))
+    dets = list(map(lambda g: np.linalg.det(g), tqdm(gs['2'], desc="Comp. Det.")))
     
     # list(map(lambda m, d: m.__setatr__("determinant", d), mediums['2'], dets))
     
     # index, value_1[sem o último], value_2[sem o primeiro]
-    indiced = list(map(lambda item: (item[2][0], item[0], item[1]), zip(dets[:-1], dets[1:], enumerate(dets[:-1]))))
+    indiced = list(map(lambda item: (item[2][0], item[0], item[1]), tqdm(zip(dets[:-1], dets[1:], enumerate(dets[:-1])), desc="Indexing")))
     # identificando se valores consecutivos possuem sinais diferentes
     # index, (valor_1, valor_2), if sinal diferente
     signed = list(map(lambda item: (
         item[0], 
         (item[1], item[2]), 
         (item[1]>=0 and item[2]<0) or (item[1]<0 and item[2]>=0)
-    ), indiced))
+    ), tqdm(indiced, desc="Checking Sign")))
     # filtragem para pegar sinais diferentes
-    filtered_signed = list(filter(lambda item: item[2], signed))
+    filtered_signed = list(filter(lambda item: item[2], tqdm(signed, desc="Filtered Sign")))
     # correlacionando com a diferença entre determinantes
     # index, (valor_1, valor_2), sinal, diferença
     diffs = list(map(lambda item: (
         item[0], item[1], item[2],
         abs(np.abs(item[1][0]) - np.abs(item[1][1])),
-    ), filtered_signed))
+    ), tqdm(filtered_signed, desc="Comp. Diffs")))
     # pegando apenas valores da diferênça abaixo do treshold
-    filtered_diffs = list(filter(lambda item: item[3]<=THRESHOLD, diffs))
+    filtered_diffs = list(filter(lambda item: item[3]<=THRESHOLD, tqdm(diffs, desc="Filter Diffs")))
     
     # selecting omegas and kxs
     kx_omega_pair = list(map(lambda item: 
@@ -530,13 +552,13 @@ if __name__ == "__main__":
             (mediums['2'][item[0]].k_x + mediums['2'][item[0]+1].k_x)/2,
             mediums['2'][item[0]].omega
         ), 
-    filtered_diffs))
+    tqdm(filtered_diffs, desc="Paring")))
     
     fim = time.perf_counter()
     tempo_execucao = fim - inicio
     
-    kxs = list(map(lambda item: item[0], kx_omega_pair))
-    omegas = list(map(lambda item: item[1], kx_omega_pair))
+    kxs = list(map(lambda item: item[0], tqdm(kx_omega_pair, desc="Separating Kxs")))
+    omegas = list(map(lambda item: item[1], tqdm(kx_omega_pair, desc="Separating Omegas")))
     
     lineplot(
         lista_x=kxs, 
