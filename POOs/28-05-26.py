@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import itertools as it
+import time
 
 from typing import Union, Optional, List
 from abc import ABC
@@ -35,8 +36,7 @@ class Medium(ABC):
         # Lamé Constants
         self._lame_mu = None
         self._lame_lambda = None
-        
-        
+            
     @property
     def lame_mu(self) -> float:
         """The Lamé constants are two independent elastic parameters, `lambda` and `mu`, used to describe the mechanical properties of isotropic materials in wave propagation.
@@ -396,46 +396,30 @@ def metodo_bissecao(f, a, b, tol=1e-6, max_iter=100):
 raiz = metodo_bissecao(np.sin, 2, 4)
 print(f"Raiz encontrada: {raiz}") # Saída próxima de 3.14159...   
 
-def lineplot(vetores: List[np.array], omegas: List[float]) -> None:
-    angles = list(map(lambda t: (t*180)/np.pi, omegas))
-    
-    onda_P = np.array([v[0, 0] for v in vetores])
-    onda_Sv = np.array([-v[1, 0] for v in vetores])
-    onda_Sh = np.array([v[2, 0] for v in vetores])
+def lineplot(lista_x, lista_y, tempo, tolerancia, lblx, lbly) -> None:
+    # (Opcional) Define o tamanho da figura
+    plt.figure(figsize=(8, 5))
 
-    # =====================================================================
-    # 3. CRIANDO A VISUALIZAÇÃO
-    # =====================================================================
-    # Criando a figura e os eixos (1 linha, 2 colunas)
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+    # 2. Cria o scatter plot
+    # color: cor dos pontos | marker: formato do ponto | s: tamanho do ponto
+    plt.scatter(lista_x, lista_y, color='blue', marker='o', s=1)
 
-    # --- Plot da Esquerda: Parte Real ---
-    ax1.plot(angles, onda_P.real, label='Ux', color='blue')
-    ax1.plot(angles, onda_Sv.real, label='Uy', color='orange')
-    ax1.plot(angles, onda_Sh.real, label='Uz', color='green')
-    ax1.set_title('Parte Real da Amplitude das Ondas')
-    ax1.set_xlabel('Angulo em Graus')
-    ax1.set_ylabel('Amplitude das Ondas')
-    ax1.grid(True, linestyle='--', alpha=0.7)
-    ax1.legend()
+    # 3. Adiciona título e rótulos aos eixos
+    plt.title(f"Tempo: {tempo_execucao:.5f} segundos\nTolerância: {tolerancia}")
+    plt.xlabel(lblx)
+    plt.ylabel(lbly)
 
-    # --- Plot da Direita: Parte Imaginária ---
-    ax2.plot(angles, onda_P.imag, label='Ux', color='blue')
-    ax2.plot(angles, onda_Sv.imag, label='Uy', color='orange')
-    ax2.plot(angles, onda_Sh.imag, label='Uz', color='green')
-    ax2.set_title('Parte Imaginária da Amplitude das Ondas')
-    ax2.set_xlabel('Angulo em Graus')
-    ax2.set_ylabel('Amplitude das Ondas')
-    ax2.grid(True, linestyle='--', alpha=0.7)
-    ax2.legend()
+    # (Opcional) Adiciona uma grade para facilitar a leitura
+    plt.grid(True, linestyle='--', alpha=0.7)
 
-    # Ajusta o layout para que os gráficos não fiquem sobrepostos
+    # Ajusta o layout para não cortar nenhuma informação
     plt.tight_layout()
 
-    # Exibe o gráfico
+    # 4. Mostra o gráfico na tela
     plt.show()
     
 if __name__ == "__main__":
+    inicio = time.perf_counter()
     # vp=cl, ct=vs
     medium_data = {
         '3': {'vp': 0.0, 'vs': 0.0, 'rho': 0.0, 'h': np.inf},
@@ -452,8 +436,13 @@ if __name__ == "__main__":
     DELTA_OMEGA = 1.0
     DELTA_K = 22*1e-2
     
-    omegas = np.linspace(MIN_OMEGA, MAX_OMEGA, 38)
-    ks = np.linspace(MIN_K, MAX_K, 100)
+    THRESHOLD = 1
+    
+    omegas = np.linspace(MIN_OMEGA, MAX_OMEGA, 100)
+    ks = np.linspace(MIN_K, MAX_K, 1000)
+    
+    OMEGA_LBL = f"OMEGA min: {MIN_OMEGA} max: {MAX_OMEGA} len: {len(omegas)}"
+    KX_LBL = f"KX min: {MIN_K} max: {MAX_K} len: {len(ks)}"
     
     omega_k_pair = list(it.product(omegas, ks))
     
@@ -513,20 +502,48 @@ if __name__ == "__main__":
     # Defining G2 determinants
     dets = list(map(lambda g: np.linalg.det(g), gs['2']))
     
-    # Campo de deslocamento refletido 
-    # us_2 = dict()
-    # def U_2(m: Medium):
-    #     C_p = 1.0 + 0.0j #(amplitude onda C_p=1)
-    #     return np.array([
-    #         [C_p*np.sin(m.theta)], [0.0 + 0.0j], [-(C_p*np.cos(m.theta))]
-    #     ], dtype=np.complex128)
-        
-    # us_2.update({'5': list(map(lambda m: U_2(m=m), mediums['5']))})
+    # list(map(lambda m, d: m.__setatr__("determinant", d), mediums['2'], dets))
     
-    # us_1 = dict()
-    # us_1.update({'5': list(map(lambda r, u2: r@u2, rs['4'], us_2['5']))})
+    # index, value_1[sem o último], value_2[sem o primeiro]
+    indiced = list(map(lambda item: (item[2][0], item[0], item[1]), zip(dets[:-1], dets[1:], enumerate(dets[:-1]))))
+    # identificando se valores consecutivos possuem sinais diferentes
+    # index, (valor_1, valor_2), if sinal diferente
+    signed = list(map(lambda item: (
+        item[0], 
+        (item[1], item[2]), 
+        (item[1]>=0 and item[2]<0) or (item[1]<0 and item[2]>=0)
+    ), indiced))
+    # filtragem para pegar sinais diferentes
+    filtered_signed = list(filter(lambda item: item[2], signed))
+    # correlacionando com a diferença entre determinantes
+    # index, (valor_1, valor_2), sinal, diferença
+    diffs = list(map(lambda item: (
+        item[0], item[1], item[2],
+        abs(np.abs(item[1][0]) - np.abs(item[1][1])),
+    ), filtered_signed))
+    # pegando apenas valores da diferênça abaixo do treshold
+    filtered_diffs = list(filter(lambda item: item[3]<=THRESHOLD, diffs))
     
+    # selecting omegas and kxs
+    kx_omega_pair = list(map(lambda item: 
+        (
+            (mediums['2'][item[0]].k_x + mediums['2'][item[0]+1].k_x)/2,
+            mediums['2'][item[0]].omega
+        ), 
+    filtered_diffs))
     
-    # lineplot(vetores=us_1['5'], thetas=list(map(lambda m: m.theta, mediums['5'])))
+    fim = time.perf_counter()
+    tempo_execucao = fim - inicio
+    
+    kxs = list(map(lambda item: item[0], kx_omega_pair))
+    omegas = list(map(lambda item: item[1], kx_omega_pair))
+    
+    lineplot(
+        lista_x=kxs, 
+        lista_y=omegas, 
+        tempo=tempo_execucao, 
+        tolerancia=THRESHOLD,
+        lblx=KX_LBL, 
+        lbly=OMEGA_LBL)
     
     pass    
