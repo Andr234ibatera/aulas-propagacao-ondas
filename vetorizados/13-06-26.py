@@ -7,14 +7,24 @@ from typing import Dict, Tuple, List
 from tqdm import tqdm
 from matplotlib.colors import LogNorm
 
-# --- CÁLCULO VETORIZADO EM LOTE (A espinha dorsal da otimização) ---
 
 def calculate_det_grid_vectorized(vp: float, vs: float, rho: float, h: float, 
                                   omega_arr: np.ndarray, kx_arr: np.ndarray, 
                                   G1: np.ndarray) -> np.ndarray:
-    """
-    Calcula os determinantes de G para toda a grade de omega e kx de forma 
+    """Calcula os determinantes de G para toda a grade de omega e kx de forma 
     100% vetorizada usando arrays estáveis do NumPy (sem loops Python).
+
+    Args:
+        vp (float): _description_
+        vs (float): _description_
+        rho (float): _description_
+        h (float): _description_
+        omega_arr (np.ndarray): _description_
+        kx_arr (np.ndarray): _description_
+        G1 (np.ndarray): _description_
+
+    Returns:
+        np.ndarray: _description_
     """
     # Cria a grade dimensional (N_omega, N_kx) e achata para processamento linear
     O, Kx = np.meshgrid(omega_arr, kx_arr, indexing='ij')
@@ -96,11 +106,22 @@ def calculate_det_grid_vectorized(vp: float, vs: float, rho: float, h: float,
     return dets.reshape(len(omega_arr), len(kx_arr))
 
 
-# --- CÁLCULO UNITÁRIO PARA BISSECÇÃO ---
-
 def calculate_single_det(vp: float, vs: float, rho: float, h: float, 
                          omega: float, kx: float, G1: np.ndarray) -> float:
-    """Função auxiliar escalar rápida para a bisseção."""
+    """Função auxiliar escalar rápida para a bisseção.
+
+    Args:
+        vp (float): _description_
+        vs (float): _description_
+        rho (float): _description_
+        h (float): _description_
+        omega (float): _description_
+        kx (float): _description_
+        G1 (np.ndarray): _description_
+
+    Returns:
+        float: _description_
+    """
     lame_mu = (vs**2) * rho
     lame_lambda = ((vp**2) * rho) - (2 * lame_mu)
 
@@ -130,14 +151,19 @@ def calculate_single_det(vp: float, vs: float, rho: float, h: float,
     r1 = np.linalg.inv(Z1 - G1) @ (G1 - Z2)
     w = M1 @ r1 @ M2Minus
     g = (Z1 @ w + Z2) @ np.linalg.inv(w + np.identity(3, dtype=np.complex128))
-    # GYHP: Aqui tava o abs, mas n pode ficar aqui pq senão na verificação de sinal vai dar merda
+    
     return float(np.linalg.det(g).real)
 
 
-# --- TRABALHO PARALELO (BISSECÇÃO) ---
-
 def bisection_worker(args) -> Tuple[float, float]:
-    """Executa a bisseção para um par de raízes candidatas isoladas."""
+    """Executa a bisseção para um par de raízes candidatas isoladas.
+
+    Args:
+        args (_type_): _description_
+
+    Returns:
+        Tuple[float, float]: _description_
+    """
     vp, vs, rho, h, omega, kx_1, kx_2, G1, tol, max_iter = args
     
     det1 = calculate_single_det(vp, vs, rho, h, omega, kx_1, G1)
@@ -146,11 +172,11 @@ def bisection_worker(args) -> Tuple[float, float]:
         kx_mid = (kx_1 + kx_2) / 2
         det_mid = calculate_single_det(vp, vs, rho, h, omega, kx_mid, G1)
         
-        if abs(det_mid) < tol or ((kx_2 - kx_1) / 2) < tol: # GYHP: Coloquei o abs aqui em vez de dentro da função do det.
+        if abs(det_mid) < tol or ((kx_2 - kx_1) / 2) < tol:
             return kx_mid, omega
         
         # Como estamos avaliando o módulo/comportamento do det, verificamos a variação do sinal aproximado
-        if (det1 * det_mid) < 0: # GYHP: Aqui é onde ia dar merda se a função determinante já desse o valor absoluto
+        if (det1 * det_mid) < 0:
             kx_2 = kx_mid
         else:
             kx_1 = kx_mid
@@ -159,70 +185,13 @@ def bisection_worker(args) -> Tuple[float, float]:
     return (kx_1 + kx_2) / 2, omega
 
 
-# --- PLOTTING ---
-
-def plotting(dados: Dict[str, List[Tuple[float, float]]], x_lbl: str, y_lbl: str, tol: float, exec_time: float):
-    plt.figure(figsize=(10, 6))
-    for grupo, pontos in dados.items():
-        if pontos:
-            x = [p[0] for p in pontos]
-            y = [p[1] for p in pontos]
-            plt.scatter(x, y, c='black', marker='.', alpha=0.8, s=1)
-
-    plt.xlabel(x_lbl)
-    plt.ylabel(y_lbl)
-    plt.title(f'Tolerance: {tol} | Vetorizado + Paralelizado\nExecution Time: {exec_time:.4f} sec')
-    plt.grid(True, linestyle='--', alpha=0.7)
-    plt.tight_layout()
-    plt.savefig(f'tolerance_{tol}.png', dpi=300, bbox_inches='tight')
-
-
-# --- EXECUÇÃO PRINCIPAL ---
-
 if __name__ == "__main__":
     medium_data = {'2': {'vp': 3.0, 'vs': 1.5, 'rho': 7.0, 'h': 1.0}}
     G1 = np.zeros((3, 3), dtype=np.complex128)
-    # THRESHOLD = 1e-6
     THRESHOLD = 1e1
     TOL_BISECTION = 1e-8
     MAX_ITER = 100
     
-    DEBUG = True
-    
-    # if DEBUG:
-    #     MIN_OMEGA = 1e-3
-    #     MAX_OMEGA = 38.0
-    #     DELTA_OMEGA = 1.0
-    #     NUM_OMEGAS = int((MAX_OMEGA - MIN_OMEGA) // DELTA_OMEGA) + 1
-    #     REAL_LAST_OMEGA = MIN_OMEGA + (NUM_OMEGAS - 1) * DELTA_OMEGA
-    #
-    #     MIN_K = 1e-3
-    #     MAX_K =  22
-    #     DELTA_K = 22*1e-2
-    #     NUM_KS = int((MAX_K - MIN_K) // DELTA_K) + 1
-    #     REAL_LAST_K = MIN_K + (NUM_KS - 1) * DELTA_K
-    # else:
-    #     # omega do código do professor com guilherme
-    #     # 1e-4:2.5e-2:14
-    #     MIN_OMEGA = 1e-4
-    #     MAX_OMEGA = 14.0
-    #     DELTA_OMEGA = 2.5e-2
-    #     NUM_OMEGAS = int((MAX_OMEGA - MIN_OMEGA) // DELTA_OMEGA) + 1
-    #     REAL_LAST_OMEGA = MIN_OMEGA + (NUM_OMEGAS - 1) * DELTA_OMEGA
-    #     # kx do código do professor com guilherme
-    #     # 0.000001:0.0000001:0.001
-    #     MIN_K = 1e-6
-    #     MAX_K = 1e-3
-    #     # DELTA_K = 1e-7
-    #     DELTA_K = 1e-5
-    #     NUM_KS = int((MAX_K - MIN_K) // DELTA_K) + 1
-    #     REAL_LAST_K = MIN_K + (NUM_KS - 1) * DELTA_K
-    #
-    # Configuração de Grade Ampla (Modo Produção)
-    # omegas = np.linspace(MIN_OMEGA, REAL_LAST_OMEGA, NUM_OMEGAS)
-    # ks = np.linspace(MIN_K, REAL_LAST_K, NUM_KS)
-
-    # GYHP: Overwrite do código original dos parametros
     MIN_OMEGA = 1e-4
     MAX_OMEGA = 36
     NUM_OMEGAS = 600
@@ -233,13 +202,11 @@ if __name__ == "__main__":
 
     omegas = np.linspace(MIN_OMEGA, MAX_OMEGA, NUM_OMEGAS)
     ks = np.linspace(MIN_K, MAX_K, NUM_KS)
-    # GYHP: Overwrite do código original dos parametros
-
 
     print(f"Iniciando varredura de grade vetorizada ({len(omegas)}x{len(ks)})...")
     inicio = time.perf_counter()
 
-    # 1. Varredura da Grade Inteira Vetorizada (Substitui o loop massivo original)
+    # Varredura da Grade Inteira Vetorizada (Substitui o loop massivo original)
     grid_dets = calculate_det_grid_vectorized(
         vp=medium_data['2']['vp'], vs=medium_data['2']['vs'], rho=medium_data['2']['rho'], h=medium_data['2']['h'],
         omega_arr=omegas, kx_arr=ks, G1=G1
@@ -248,43 +215,17 @@ if __name__ == "__main__":
     # Obter os valores absolutos reais para análise de Bolzano / Sinais
     grid_dets_real = np.real(grid_dets)
 
-    # 2. Identificar cruzamentos de zero/mudanças de comportamento na grade (Utilizando shifts do NumPy)
+    # Identificar cruzamentos de zero/mudanças de comportamento na grade (Utilizando shifts do NumPy)
     # Verifica mudanças de sinal entre colunas adjacentes (kx adjacentes para o mesmo omega)
     sign_changes = (grid_dets_real[:, :-1] * grid_dets_real[:, 1:]) < 0
     
     # Filtragem por Threshold de proximidade absoluta
-    # threshold_mask = np.abs(np.abs(grid_dets_real[:, :-1]) - np.abs(grid_dets_real[:, 1:])) < THRESHOLD
-    # threshold_mask = np.abs(grid_dets_real[:, :-1]) < THRESHOLD # GYHP: Buscando apenas por pontos próximos a zero já
-    threshold_mask = np.abs(grid_dets[:, :-1]) < THRESHOLD # GYHP: Dif só do ponto, sem comparação vizinha e grid_dets não grid_dets_real!!!
+    threshold_mask = np.abs(grid_dets[:, :-1]) < THRESHOLD
     candidates_mask = sign_changes & threshold_mask
     
     # Encontra os índices onde as condições foram satisfeitas
     omega_idxs, kx_idxs = np.where(candidates_mask)
     
-    # # 3. Preparar pacotes de dados para bisseção paralela nos candidatos encontrados
-    # bisection_tasks = []
-    # for o_idx, k_idx in zip(omega_idxs, kx_idxs):
-    #     bisection_tasks.append((
-    #         medium_data['2']['vp'], medium_data['2']['vs'], medium_data['2']['rho'], medium_data['2']['h'],
-    #         omegas[o_idx], ks[k_idx], ks[k_idx + 1], G1, TOL_BISECTION, MAX_ITER
-    #     ))
-    #
-    # print(f"Encontrados {len(bisection_tasks)} candidatos a raiz. Iniciando Bisseção Paralela...")
-
-    # # 4. Paralelização Multi-Core real para Processamento da Bisseção
-    # found_omega_kx = {}
-    # if bisection_tasks:
-    #     with ProcessPoolExecutor() as executor:
-    #         # Mapeia as tarefas entre os núcleos disponíveis do processador
-    #         results = list(tqdm(executor.map(bisection_worker, bisection_tasks), total=len(bisection_tasks), desc="Executando Bisseção"))
-    #
-    #     # Agrupa os resultados encontrados por Ômega para manter compatibilidade com sua função de plot original
-    #     for kx_res, omega_res in results:
-    #         key = f"{omega_res}"
-    #         if key not in found_omega_kx:
-    #             found_omega_kx[key] = []
-    #         found_omega_kx[key].append((kx_res, omega_res))
-
     # A não-bisseção pra só pegar o ponto médio msm.
     found_omega_kx = {}
     for o_idx, k_idx in zip(omega_idxs, kx_idxs):
@@ -300,18 +241,14 @@ if __name__ == "__main__":
     print(f"Concluído com sucesso em {tempo_execucao:.4f} segundos!")
 
     # Plotar resultados
-    KX_LBL = f"KX min: {ks[0]:.4f} max: {ks[-1]:.4f} len: {len(ks)}"
-    OMEGA_LBL = f"OMEGA min: {omegas[0]:.4f} max: {omegas[-1]:.4f} len: {len(omegas)}"
-    plotting(dados=found_omega_kx, x_lbl=KX_LBL, y_lbl=OMEGA_LBL, exec_time=tempo_execucao, tol=THRESHOLD)
-
     det_mag = np.abs(grid_dets)
+    
     plt.figure(figsize=(12, 8))
-    # plt.pcolormesh(ks, omegas, det_mag, shading="auto", cmap="inferno")
-    # print(det_mag.max())
-    plt.pcolormesh(ks, omegas, det_mag, norm=LogNorm(vmin=1e-6, vmax=det_mag.max()), shading="auto", cmap="inferno")
+    plt.pcolormesh(ks, omegas, det_mag, norm=LogNorm(vmin=det_mag.min(), vmax=det_mag.max()), shading="auto", cmap="inferno")
+    plt.title(f"Tolerance: {THRESHOLD} | Exec. time: {tempo_execucao:.4f} secs\n(Kx:Omega)={ks.shape[0]}x{omegas.shape[0]}")
     plt.colorbar(label="abs(det(G))")
-    plt.xlabel("Kx")
-    plt.ylabel("Omega")
+    plt.xlabel(f"Kx min: {MIN_K} max: {MAX_K} qtt: {NUM_KS}")
+    plt.ylabel(f"Omega min: {MIN_OMEGA} max: {MAX_OMEGA} qtt: {NUM_OMEGAS}")
     plt.ylim(0, MAX_OMEGA)
     plt.tight_layout()
     plt.savefig('pcolor_abs_det', dpi=200, bbox_inches="tight")
