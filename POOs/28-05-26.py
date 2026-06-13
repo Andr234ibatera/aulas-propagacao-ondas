@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import itertools as it
 import time
 
-from typing import Union, Optional, List
+from typing import Union, Optional, List, Dict, Tuple
 from abc import ABC
 from enum import Enum
 from tqdm import tqdm
@@ -277,6 +277,7 @@ class LocalImpedanceTensor(ABC):
     def __str__(self) -> str:
         return f"Z1\n{self.Z1}\nZ2\n{self.Z2}"
 
+
 class PhiMatriz(ABC):
     def __init__(self, medium: Medium, h: float):
         """_summary_
@@ -356,71 +357,120 @@ class MMatriz(ABC):
         return f"M1\n{self.M1}\nM2\n{self.M2}\nM2Minus\n{self.M2Minus}"
 
 
-def metodo_bissecao(f, a, b, tol=1e-6, max_iter=100):
+def calculate_until_det_of_G(
+    vp: float, 
+    vs: float, 
+    rho: float, 
+    h: float, 
+    omega: float, 
+    kx: float,
+    G1: np.ndarray
+) -> Dict:
+    # Definindo os meios
+    medium = Medium(vp=vp, vs=vs, rho=rho, omega=omega, k_x=kx)
+    # Definindo as matrizes de deslocamento
+    displacement = DisplacementPolarizationMatriz(medium=medium) 
+    # L Matriz from the top to bottom
+    l_matriz = LMatriz(medium=medium, displacement=displacement)
+    # Local Impedance Tensor from the top to bottom
+    local_impedance = LocalImpedanceTensor(medium=medium, displacement=displacement, l_matriz=l_matriz)
+    # Defining Phis for the layer 2 to 3
+    phi_matriz = PhiMatriz(medium=medium, h=h)
+    # Defining MMatraiz for layers 2 to 3
+    m_matriz = MMatriz(displacement=displacement, phi=phi_matriz)  
+    # Defining Gs, Rs, Ws
+    r1 = np.linalg.inv((local_impedance.Z1 - G1))@(G1 - local_impedance.Z2)
+    w = m_matriz.M1 @ r1 @ m_matriz.M2Minus
+    g = (local_impedance.Z1@w + local_impedance.Z2) @ np.linalg.inv(w+np.identity(local_impedance.Z2.shape[0]))
+    # Calculating the determinat of g
+    det = np.linalg.det(g)
+    
+    return {
+        "vp": vp, "vs": vs, "rho": rho, "h": h, "omega": omega, "kx": kx,
+        "medium": medium,
+        "displacement": displacement,
+        "l_matriz": l_matriz,
+        "local_impedance": local_impedance,
+        "phi_matriz": phi_matriz,
+        "m_matriz": m_matriz,
+        "r1": r1,
+        "w": w,
+        "g": g,
+        "det": det
+    }
+
+
+def metodo_bissecao(d_1: Dict, d_2: Dict, G1: np.ndarray, tol=1e-6, max_iter=100) -> Tuple[float, float]:
+    """_summary_
+
+    Args:
+        d_1 (Dict): _description_
+        d_2 (Dict): _description_
+        G1 (np.ndarray): _description_
+        tol (_type_, optional): _description_. Defaults to 1e-6.
+        max_iter (int, optional): _description_. Defaults to 100.
+
+    Returns:
+        Tuple[float, float]: _description_
     """
-    Calcula a raiz de f(x) no intervalo [a, b] usando o método da bisseção.
+    kx_1 = d_1['medium'].k_x
+    kx_2 = d_2['medium'].k_x
     
-    Parâmetros:
-    f : callable - Função contínua tal que f(a) * f(b) < 0
-    a, b : float - Extremidades do intervalo inicial
-    tol : float - Tolerância de erro aceitável
-    max_iter : int - Número máximo de iterações
-    
-    Retorna:
-    p : float - Aproximação da raiz
-    """
-    fa = f(a)
-    fb = f(b)
-    
-    if fa * fb >= 0:
-        raise ValueError("f(a) e f(b) devem ter sinais opostos.")
-    
-    for _ in range(max_iter):
-        p = (a + b) / 2
-        fp = f(p)
+    for i in range(max_iter):
         
-        # Critério de parada: erro absoluto ou valor da função próximo de zero
-        if abs(fp) < tol or (b - a) / 2 < tol:
-            return p
+        kx_mid = (kx_1+kx_2)/2
         
-        if fa * fp < 0:
-            b = p
-            fb = fp
+        d_mid = calculate_until_det_of_G(
+                vp=d_1['medium'].vp,
+                vs=d_1['medium'].vs,
+                rho=d_1['medium'].rho,
+                h=d_1['phi_matriz'].h,
+                omega=d_1['medium'].omega,
+                kx=kx_mid,
+                G1=G1,
+            )
+        
+        if abs(d_mid['det'])<tol or ((kx_2-kx_1)/2)<tol:
+            break
+        
+        if (d_1['det']*d_mid['det'])<0:
+            d_2 = d_mid
         else:
-            a = p
-            fa = fp
-            
-    return (a + b) / 2
+            d_1 = d_mid
+    
+    return d_mid['medium'].k_x, d_mid['medium'].omega
 
-# Exemplo de uso:
-# Encontrar a raiz de sin(x) no intervalo [2, 4] (raiz esperada: pi)
-raiz = metodo_bissecao(np.sin, 2, 4)
-print(f"Raiz encontrada: {raiz}") # Saída próxima de 3.14159...   
 
-def lineplot(lista_x, lista_y, tempo, tolerancia, lblx, lbly) -> None:
-    # (Opcional) Define o tamanho da figura
-    plt.figure(figsize=(8, 5))
+def plotting(dados: Dict, x_lbl: str, y_lbl: str, tol: float, time: float):
+    # Iterando sobre o dicionário (chave = grupo, valor = lista de tuplas)
+    for grupo, pontos in dados.items():
+        # Separando as coordenadas X e Y usando list comprehension
+        x = [p[0] for p in pontos]
+        y = [p[1] for p in pontos]
+        
+        # Plota os pontos do grupo atual. 
+        # O matplotlib define uma cor automática diferente para cada iteração.
+        plt.scatter(x, y, label=grupo, alpha=0.8, edgecolors='none', s=20)
 
-    # 2. Cria o scatter plot
-    # color: cor dos pontos | marker: formato do ponto | s: tamanho do ponto
-    plt.scatter(lista_x, lista_y, color='blue', marker='o', s=1)
-
-    # 3. Adiciona título e rótulos aos eixos
-    plt.title(f"Tempo: {tempo_execucao:.5f} segundos\nTolerância: {tolerancia}")
-    plt.xlabel(lblx)
-    plt.ylabel(lbly)
-
-    # (Opcional) Adiciona uma grade para facilitar a leitura
+    # Customizações do gráfico
+    plt.xlabel(x_lbl)
+    plt.ylabel(y_lbl)
+    plt.title(f'Tolerance before bisection: {tol}\nExecution Time: {time} sec')
     plt.grid(True, linestyle='--', alpha=0.7)
 
-    # Ajusta o layout para não cortar nenhuma informação
+    # Exibe a legenda indicando qual cor pertence a qual grupo
+    # plt.legend(title="Omegas")
+
+    # Exibe o gráfico na tela
+    # plt.show()
+
+    # # Ajusta o layout para não cortar nenhuma informação
     plt.tight_layout()
 
     # 4. Mostra o gráfico na tela
-    plt.show()
+    plt.savefig(f'tolerancia{tol}.png', dpi=300, bbox_inches='tight')
     
 if __name__ == "__main__":
-    inicio = time.perf_counter()
     # vp=cl, ct=vs
     medium_data = {
         '3': {'vp': 0.0, 'vs': 0.0, 'rho': 0.0, 'h': np.inf},
@@ -428,7 +478,8 @@ if __name__ == "__main__":
         '1': {'vp': 0.0, 'vs': 0.0, 'rho': 0.0, 'h': np.inf},
     }
     
-    DEBUG = True
+    DEBUG = False
+    THRESHOLD = 1
     
     if DEBUG:
         MIN_OMEGA = 1e-3
@@ -454,118 +505,61 @@ if __name__ == "__main__":
         # 0.000001:0.0000001:0.001
         MIN_K = 1e-6
         MAX_K = 1e-3
-        DELTA_K = 1e-7
+        # DELTA_K = 1e-7
+        DELTA_K = 1e-5
         NUM_KS = int((MAX_K - MIN_K) // DELTA_K) + 1
         REAL_LAST_K = MIN_K + (NUM_KS - 1) * DELTA_K
 
-    THRESHOLD = 1
-    
+    G1 = np.zeros((3, 3), dtype=np.complex128)
+
+    inicio = time.perf_counter()
+        
     omegas = np.linspace(MIN_OMEGA, REAL_LAST_OMEGA, NUM_OMEGAS)
     ks = np.linspace(MIN_K, REAL_LAST_K, NUM_KS)
-    
+        
     OMEGA_LBL = f"OMEGA min: {MIN_OMEGA} max: {MAX_OMEGA} len: {len(omegas)}"
     KX_LBL = f"KX min: {MIN_K} max: {MAX_K} len: {len(ks)}"
     
     omega_k_pair = list(it.product(omegas, ks))
     
-    # Definindo os meios
-    mediums = dict()
-    for i in tqdm(range(3,0,-1), desc="Init. Mediums"):
-        medium_temp = list(map(lambda item: 
-            Medium(
-                vp=medium_data[str(i)]['vp'], 
-                vs=medium_data[str(i)]['vs'], 
-                rho=medium_data[str(i)]['rho'],
-                omega=item[0],
-                k_x=item[1]
-            ), omega_k_pair))
-        mediums.update({str(i): medium_temp})
-        
-    # Definindo as matrizes de deslocamento
-    displacements = dict()
-    for i in tqdm(range(3,0,-1), desc="Init. Disp. Matrices"):
-        displacements.update({str(i):
-            list(map(lambda m: DisplacementPolarizationMatriz(medium=m), mediums[str(i)]))})
+    calculated_data = list(map(lambda item: 
+        calculate_until_det_of_G(
+            vp=medium_data['2']['vp'],
+            vs=medium_data['2']['vs'],
+            rho=medium_data['2']['rho'],
+            h=medium_data['2']['h'],
+            omega=item[0],
+            kx=item[1],
+            G1=G1,
+        )
+    , tqdm(omega_k_pair, desc="Generating initial data")))
     
-    # L Matriz from the top to bottom
-    ls = dict()
-    for i in tqdm(range(3,0,-1), desc="Init. L Matriz"):
-        ls.update({str(i):
-            list(map(lambda m, d: LMatriz(medium=m, displacement=d), mediums[str(i)], displacements[str(i)]))})
+    keys = list(set(map(lambda dt: str(dt['omega']), calculated_data)))
+    grouped = {f'{k}': list() for k in keys}
+    list(map(lambda item: grouped[str(item['omega'])].append(item), tqdm(calculated_data, desc="Grouping by")))
     
-    # Local Impedance Tensor from the top to bottom
-    zs = dict()
-    for i in tqdm(range(3,0,-1), desc="Init. Local Imp."):
-        zs.update({str(i):
-            list(map(lambda m, d, l: LocalImpedanceTensor(medium=m, displacement=d, l_matriz=l), mediums[str(i)], displacements[str(i)], ls[str(i)]))})
+    # filtering for the dets that are diferen sings Bolzano theorem
+    filtered = list(map(lambda k: 
+        list(filter(lambda item: (item[0]['det']*item[1]['det'])<0, zip(grouped[k][:-1], grouped[k][1:])))
+    , tqdm(grouped.keys(), desc="Searching Signs")))
     
-    # Defining Phis for the layer 2 to 3
-    phis = dict()
-    for i in tqdm(range(2,3), desc="Init. Phis"):
-        phis.update({str(i): list(map(lambda m: PhiMatriz(medium=m, h=medium_data[str(i)]['h']), mediums[str(i)]))})
+    # filtering det diff bigger then threshold
+    filtered = list(map(lambda k: 
+        list(filter(lambda item: abs(abs(item[0]['det']) - abs(item[1]['det'])) < THRESHOLD, zip(grouped[k][:-1], grouped[k][1:])))
+    , tqdm(grouped.keys(), desc="Applying Threshold")))
     
-    # Defining MMatraiz for layers 2 to 3
-    ms = dict()
-    for i in tqdm(range(2,3), desc="Init. M Matriz"):
-        ms.update({str(i): list(map(lambda d, p: MMatriz(displacement=d, phi=p), displacements[str(i)], phis[str(i)]))})
-        
-    # Defining Gs, Rs, Ws
-    gs = dict()
-    rs = dict()
-    gs.update({'1': list(map(lambda _: np.array([[x]*3 for x in [0.0 + 0.0j]*3], dtype=np.complex128), tqdm(zs['1'], desc="Init. G1")))})
-    rs.update({'1': list(map(lambda z, g: np.linalg.inv((z.Z1 - g))@(g - z.Z2), zs['2'], tqdm(gs['1'], desc="Init. R1")))})
-    ws = dict()
-    for i in tqdm(range(2,3), desc="Init. Ws Gs"):
-        w_temp = list(map(lambda m, r: m.M1 @ r @ m.M2Minus, ms[str(i)], rs[str(i-1)]))
-        ws.update({str(i): w_temp})
-        g_temp = list(map(lambda z, w: (z.Z1@w+z.Z2) @ np.linalg.inv(w+np.identity(z.Z2.shape[0])), zs[str(i)], w_temp))
-        gs.update({str(i): g_temp})
+    # cleaning empt lists
+    filtered = list(filter(lambda ls: len(ls)>0, filtered))
     
-    # Defining G2 determinants
-    dets = list(map(lambda g: np.linalg.det(g), tqdm(gs['2'], desc="Comp. Det.")))
-    
-    # list(map(lambda m, d: m.__setatr__("determinant", d), mediums['2'], dets))
-    
-    # index, value_1[sem o último], value_2[sem o primeiro]
-    indiced = list(map(lambda item: (item[2][0], item[0], item[1]), tqdm(zip(dets[:-1], dets[1:], enumerate(dets[:-1])), desc="Indexing")))
-    # identificando se valores consecutivos possuem sinais diferentes
-    # index, (valor_1, valor_2), if sinal diferente
-    signed = list(map(lambda item: (
-        item[0], 
-        (item[1], item[2]), 
-        (item[1]>=0 and item[2]<0) or (item[1]<0 and item[2]>=0)
-    ), tqdm(indiced, desc="Checking Sign")))
-    # filtragem para pegar sinais diferentes
-    filtered_signed = list(filter(lambda item: item[2], tqdm(signed, desc="Filtered Sign")))
-    # correlacionando com a diferença entre determinantes
-    # index, (valor_1, valor_2), sinal, diferença
-    diffs = list(map(lambda item: (
-        item[0], item[1], item[2],
-        abs(np.abs(item[1][0]) - np.abs(item[1][1])),
-    ), tqdm(filtered_signed, desc="Comp. Diffs")))
-    # pegando apenas valores da diferênça abaixo do treshold
-    filtered_diffs = list(filter(lambda item: item[3]<=THRESHOLD, tqdm(diffs, desc="Filter Diffs")))
-    
-    # selecting omegas and kxs
-    kx_omega_pair = list(map(lambda item: 
-        (
-            (mediums['2'][item[0]].k_x + mediums['2'][item[0]+1].k_x)/2,
-            mediums['2'][item[0]].omega
-        ), 
-    tqdm(filtered_diffs, desc="Paring")))
+    # search for the roots aproximating to zero
+    found_omega_kx = dict()
+    for lss in tqdm(filtered, desc="Sweeping Omegas"):
+        temp = list(map(lambda pair: 
+            metodo_bissecao(d_1=pair[0], d_2=pair[1], G1=G1)
+        , tqdm(lss, desc=f"Exploring Omega {lss[0][0]['omega']}")))
+        found_omega_kx.update({f'{temp[0][1]}': temp})
     
     fim = time.perf_counter()
     tempo_execucao = fim - inicio
-    
-    kxs = list(map(lambda item: item[0], tqdm(kx_omega_pair, desc="Separating Kxs")))
-    omegas = list(map(lambda item: item[1], tqdm(kx_omega_pair, desc="Separating Omegas")))
-    
-    lineplot(
-        lista_x=kxs, 
-        lista_y=omegas, 
-        tempo=tempo_execucao, 
-        tolerancia=THRESHOLD,
-        lblx=KX_LBL, 
-        lbly=OMEGA_LBL)
-    
-    pass    
+
+    plotting(dados=found_omega_kx, x_lbl=KX_LBL, y_lbl=OMEGA_LBL, time=tempo_execucao, tol=THRESHOLD)
