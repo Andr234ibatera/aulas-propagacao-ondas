@@ -129,7 +129,8 @@ def calculate_single_det(vp: float, vs: float, rho: float, h: float,
     r1 = np.linalg.inv(Z1 - G1) @ (G1 - Z2)
     w = M1 @ r1 @ M2Minus
     g = (Z1 @ w + Z2) @ np.linalg.inv(w + np.identity(3, dtype=np.complex128))
-    return float(np.abs(np.linalg.det(g)))
+    # GYHP: Aqui tava o abs, mas n pode ficar aqui pq senão na verificação de sinal vai dar merda
+    return float(np.linalg.det(g).real)
 
 
 # --- TRABALHO PARALELO (BISSECÇÃO) ---
@@ -144,11 +145,11 @@ def bisection_worker(args) -> Tuple[float, float]:
         kx_mid = (kx_1 + kx_2) / 2
         det_mid = calculate_single_det(vp, vs, rho, h, omega, kx_mid, G1)
         
-        if det_mid < tol or ((kx_2 - kx_1) / 2) < tol:
+        if abs(det_mid) < tol or ((kx_2 - kx_1) / 2) < tol: # GYHP: Coloquei o abs aqui em vez de dentro da função do det.
             return kx_mid, omega
         
         # Como estamos avaliando o módulo/comportamento do det, verificamos a variação do sinal aproximado
-        if (det1 * det_mid) < 0:
+        if (det1 * det_mid) < 0: # GYHP: Aqui é onde ia dar merda se a função determinante já desse o valor absoluto
             kx_2 = kx_mid
         else:
             kx_1 = kx_mid
@@ -165,7 +166,7 @@ def plotting(dados: Dict[str, List[Tuple[float, float]]], x_lbl: str, y_lbl: str
         if pontos:
             x = [p[0] for p in pontos]
             y = [p[1] for p in pontos]
-            plt.scatter(x, y, alpha=0.8, edgecolors='none', s=20)
+            plt.scatter(x, y, c='black', marker='.', alpha=0.8, s=1)
 
     plt.xlabel(x_lbl)
     plt.ylabel(y_lbl)
@@ -180,44 +181,59 @@ def plotting(dados: Dict[str, List[Tuple[float, float]]], x_lbl: str, y_lbl: str
 if __name__ == "__main__":
     medium_data = {'2': {'vp': 3.0, 'vs': 1.5, 'rho': 7.0, 'h': 1.0}}
     G1 = np.zeros((3, 3), dtype=np.complex128)
-    THRESHOLD = 1e-6
+    # THRESHOLD = 1e-6
+    THRESHOLD = 1e1
     TOL_BISECTION = 1e-8
     MAX_ITER = 100
     
     DEBUG = True
     
-    if DEBUG:
-        MIN_OMEGA = 1e-3
-        MAX_OMEGA = 38.0
-        DELTA_OMEGA = 1.0
-        NUM_OMEGAS = int((MAX_OMEGA - MIN_OMEGA) // DELTA_OMEGA) + 1
-        REAL_LAST_OMEGA = MIN_OMEGA + (NUM_OMEGAS - 1) * DELTA_OMEGA
-        
-        MIN_K = 1e-3
-        MAX_K =  22
-        DELTA_K = 22*1e-2
-        NUM_KS = int((MAX_K - MIN_K) // DELTA_K) + 1
-        REAL_LAST_K = MIN_K + (NUM_KS - 1) * DELTA_K
-    else:
-        # omega do código do professor com guilherme
-        # 1e-4:2.5e-2:14
-        MIN_OMEGA = 1e-4
-        MAX_OMEGA = 14.0
-        DELTA_OMEGA = 2.5e-2
-        NUM_OMEGAS = int((MAX_OMEGA - MIN_OMEGA) // DELTA_OMEGA) + 1
-        REAL_LAST_OMEGA = MIN_OMEGA + (NUM_OMEGAS - 1) * DELTA_OMEGA
-        # kx do código do professor com guilherme
-        # 0.000001:0.0000001:0.001
-        MIN_K = 1e-6
-        MAX_K = 1e-3
-        # DELTA_K = 1e-7
-        DELTA_K = 1e-5
-        NUM_KS = int((MAX_K - MIN_K) // DELTA_K) + 1
-        REAL_LAST_K = MIN_K + (NUM_KS - 1) * DELTA_K
-
+    # if DEBUG:
+    #     MIN_OMEGA = 1e-3
+    #     MAX_OMEGA = 38.0
+    #     DELTA_OMEGA = 1.0
+    #     NUM_OMEGAS = int((MAX_OMEGA - MIN_OMEGA) // DELTA_OMEGA) + 1
+    #     REAL_LAST_OMEGA = MIN_OMEGA + (NUM_OMEGAS - 1) * DELTA_OMEGA
+    #
+    #     MIN_K = 1e-3
+    #     MAX_K =  22
+    #     DELTA_K = 22*1e-2
+    #     NUM_KS = int((MAX_K - MIN_K) // DELTA_K) + 1
+    #     REAL_LAST_K = MIN_K + (NUM_KS - 1) * DELTA_K
+    # else:
+    #     # omega do código do professor com guilherme
+    #     # 1e-4:2.5e-2:14
+    #     MIN_OMEGA = 1e-4
+    #     MAX_OMEGA = 14.0
+    #     DELTA_OMEGA = 2.5e-2
+    #     NUM_OMEGAS = int((MAX_OMEGA - MIN_OMEGA) // DELTA_OMEGA) + 1
+    #     REAL_LAST_OMEGA = MIN_OMEGA + (NUM_OMEGAS - 1) * DELTA_OMEGA
+    #     # kx do código do professor com guilherme
+    #     # 0.000001:0.0000001:0.001
+    #     MIN_K = 1e-6
+    #     MAX_K = 1e-3
+    #     # DELTA_K = 1e-7
+    #     DELTA_K = 1e-5
+    #     NUM_KS = int((MAX_K - MIN_K) // DELTA_K) + 1
+    #     REAL_LAST_K = MIN_K + (NUM_KS - 1) * DELTA_K
+    #
     # Configuração de Grade Ampla (Modo Produção)
-    omegas = np.linspace(MIN_OMEGA, REAL_LAST_OMEGA, NUM_OMEGAS)
-    ks = np.linspace(MIN_K, REAL_LAST_K, NUM_KS)
+    # omegas = np.linspace(MIN_OMEGA, REAL_LAST_OMEGA, NUM_OMEGAS)
+    # ks = np.linspace(MIN_K, REAL_LAST_K, NUM_KS)
+
+    # GYHP: Overwrite do código original dos parametros
+    MIN_OMEGA = 1e-4
+    MAX_OMEGA = 36
+    NUM_OMEGAS = 600
+
+    MIN_K = 0.0
+    MAX_K = 15.0
+    NUM_KS = 1000
+
+    omegas = np.linspace(MIN_OMEGA, MAX_OMEGA, NUM_OMEGAS)
+    ks = np.linspace(MIN_K, MAX_K, NUM_KS)
+    # GYHP: Overwrite do código original dos parametros
+
 
     print(f"Iniciando varredura de grade vetorizada ({len(omegas)}x{len(ks)})...")
     inicio = time.perf_counter()
@@ -236,35 +252,47 @@ if __name__ == "__main__":
     sign_changes = (grid_dets_real[:, :-1] * grid_dets_real[:, 1:]) < 0
     
     # Filtragem por Threshold de proximidade absoluta
-    threshold_mask = np.abs(np.abs(grid_dets_real[:, :-1]) - np.abs(grid_dets_real[:, 1:])) < THRESHOLD
+    # threshold_mask = np.abs(np.abs(grid_dets_real[:, :-1]) - np.abs(grid_dets_real[:, 1:])) < THRESHOLD
+    # threshold_mask = np.abs(grid_dets_real[:, :-1]) < THRESHOLD # GYHP: Buscando apenas por pontos próximos a zero já
+    threshold_mask = np.abs(grid_dets[:, :-1]) < THRESHOLD # GYHP: Dif só do ponto, sem comparação vizinha e grid_dets não grid_dets_real!!!
     candidates_mask = sign_changes & threshold_mask
     
     # Encontra os índices onde as condições foram satisfeitas
     omega_idxs, kx_idxs = np.where(candidates_mask)
     
-    # 3. Preparar pacotes de dados para bisseção paralela nos candidatos encontrados
-    bisection_tasks = []
-    for o_idx, k_idx in zip(omega_idxs, kx_idxs):
-        bisection_tasks.append((
-            medium_data['2']['vp'], medium_data['2']['vs'], medium_data['2']['rho'], medium_data['2']['h'],
-            omegas[o_idx], ks[k_idx], ks[k_idx + 1], G1, TOL_BISECTION, MAX_ITER
-        ))
+    # # 3. Preparar pacotes de dados para bisseção paralela nos candidatos encontrados
+    # bisection_tasks = []
+    # for o_idx, k_idx in zip(omega_idxs, kx_idxs):
+    #     bisection_tasks.append((
+    #         medium_data['2']['vp'], medium_data['2']['vs'], medium_data['2']['rho'], medium_data['2']['h'],
+    #         omegas[o_idx], ks[k_idx], ks[k_idx + 1], G1, TOL_BISECTION, MAX_ITER
+    #     ))
+    #
+    # print(f"Encontrados {len(bisection_tasks)} candidatos a raiz. Iniciando Bisseção Paralela...")
 
-    print(f"Encontrados {len(bisection_tasks)} candidatos a raiz. Iniciando Bisseção Paralela...")
+    # # 4. Paralelização Multi-Core real para Processamento da Bisseção
+    # found_omega_kx = {}
+    # if bisection_tasks:
+    #     with ProcessPoolExecutor() as executor:
+    #         # Mapeia as tarefas entre os núcleos disponíveis do processador
+    #         results = list(tqdm(executor.map(bisection_worker, bisection_tasks), total=len(bisection_tasks), desc="Executando Bisseção"))
+    #
+    #     # Agrupa os resultados encontrados por Ômega para manter compatibilidade com sua função de plot original
+    #     for kx_res, omega_res in results:
+    #         key = f"{omega_res}"
+    #         if key not in found_omega_kx:
+    #             found_omega_kx[key] = []
+    #         found_omega_kx[key].append((kx_res, omega_res))
 
-    # 4. Paralelização Multi-Core real para Processamento da Bisseção
+    # A não-bisseção pra só pegar o ponto médio msm.
     found_omega_kx = {}
-    if bisection_tasks:
-        with ProcessPoolExecutor() as executor:
-            # Mapeia as tarefas entre os núcleos disponíveis do processador
-            results = list(tqdm(executor.map(bisection_worker, bisection_tasks), total=len(bisection_tasks), desc="Executando Bisseção"))
-        
-        # Agrupa os resultados encontrados por Ômega para manter compatibilidade com sua função de plot original
-        for kx_res, omega_res in results:
-            key = f"{omega_res}"
-            if key not in found_omega_kx:
-                found_omega_kx[key] = []
-            found_omega_kx[key].append((kx_res, omega_res))
+    for o_idx, k_idx in zip(omega_idxs, kx_idxs):
+        kx_mid = (ks[k_idx] + ks[k_idx + 1]) / 2
+        omega_val = omegas[o_idx]
+        key = f"{omega_val}"
+        if key not in found_omega_kx:
+            found_omega_kx[key] = []
+        found_omega_kx[key].append((kx_mid, omega_val))
 
     fim = time.perf_counter()
     tempo_execucao = fim - inicio

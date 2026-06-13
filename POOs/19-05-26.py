@@ -405,44 +405,44 @@ class MMatriz(ABC):
         return f"M1\n{self.M1}\nM2\n{self.M2}\nM2Minus\n{self.M2Minus}"
 
 
-def lineplot(vetores: List[np.array], thetas: List[float]) -> None:
-    angles = list(map(lambda t: (t*180)/np.pi, thetas))
-    
-    onda_P = np.array([v[0, 0] for v in vetores])
-    onda_Sv = np.array([-v[1, 0] for v in vetores])
-    onda_Sh = np.array([v[2, 0] for v in vetores])
-
-    # =====================================================================
-    # 3. CRIANDO A VISUALIZAÇÃO
-    # =====================================================================
-    # Criando a figura e os eixos (1 linha, 2 colunas)
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-
-    # --- Plot da Esquerda: Parte Real ---
-    ax1.plot(angles, onda_P.real, label='Ux', color='blue')
-    ax1.plot(angles, onda_Sv.real, label='Uy', color='orange')
-    ax1.plot(angles, onda_Sh.real, label='Uz', color='green')
-    ax1.set_title('Parte Real da Amplitude das Ondas')
-    ax1.set_xlabel('Angulo em Graus')
-    ax1.set_ylabel('Amplitude das Ondas')
-    ax1.grid(True, linestyle='--', alpha=0.7)
-    ax1.legend()
-
-    # --- Plot da Direita: Parte Imaginária ---
-    ax2.plot(angles, onda_P.imag, label='Ux', color='blue')
-    ax2.plot(angles, onda_Sv.imag, label='Uy', color='orange')
-    ax2.plot(angles, onda_Sh.imag, label='Uz', color='green')
-    ax2.set_title('Parte Imaginária da Amplitude das Ondas')
-    ax2.set_xlabel('Angulo em Graus')
-    ax2.set_ylabel('Amplitude das Ondas')
-    ax2.grid(True, linestyle='--', alpha=0.7)
-    ax2.legend()
-
-    # Ajusta o layout para que os gráficos não fiquem sobrepostos
-    plt.tight_layout()
-
-    # Exibe o gráfico
-    plt.show()
+# def lineplot(vetores: List[np.array], thetas: List[float]) -> None:
+#     angles = list(map(lambda t: (t*180)/np.pi, thetas))
+#
+#     onda_P = np.array([v[0, 0] for v in vetores])
+#     onda_Sv = np.array([-v[1, 0] for v in vetores])
+#     onda_Sh = np.array([v[2, 0] for v in vetores])
+#
+#     # =====================================================================
+#     # 3. CRIANDO A VISUALIZAÇÃO
+#     # =====================================================================
+#     # Criando a figura e os eixos (1 linha, 2 colunas)
+#     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+#
+#     # --- Plot da Esquerda: Parte Real ---
+#     ax1.plot(angles, onda_P.real, label='Ux', color='blue')
+#     ax1.plot(angles, onda_Sv.real, label='Uy', color='orange')
+#     ax1.plot(angles, onda_Sh.real, label='Uz', color='green')
+#     ax1.set_title('Parte Real da Amplitude das Ondas')
+#     ax1.set_xlabel('Angulo em Graus')
+#     ax1.set_ylabel('Amplitude das Ondas')
+#     ax1.grid(True, linestyle='--', alpha=0.7)
+#     ax1.legend()
+#
+#     # --- Plot da Direita: Parte Imaginária ---
+#     ax2.plot(angles, onda_P.imag, label='Ux', color='blue')
+#     ax2.plot(angles, onda_Sv.imag, label='Uy', color='orange')
+#     ax2.plot(angles, onda_Sh.imag, label='Uz', color='green')
+#     ax2.set_title('Parte Imaginária da Amplitude das Ondas')
+#     ax2.set_xlabel('Angulo em Graus')
+#     ax2.set_ylabel('Amplitude das Ondas')
+#     ax2.grid(True, linestyle='--', alpha=0.7)
+#     ax2.legend()
+#
+#     # Ajusta o layout para que os gráficos não fiquem sobrepostos
+#     plt.tight_layout()
+#
+#     # Exibe o gráfico
+#     plt.show("plot.png")
     
 if __name__ == "__main__":
     medium_data = {
